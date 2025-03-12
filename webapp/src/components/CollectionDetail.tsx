@@ -38,7 +38,7 @@ const CollectionDetail: React.FC = () => {
 
   if (collectionState.isLoading && !collectionState.currentCollection) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-grow flex items-center justify-center">
         <svg className="animate-spin h-10 w-10 text-primary-500" viewBox="0 0 24 24">
           <circle
             className="opacity-25"
@@ -61,7 +61,7 @@ const CollectionDetail: React.FC = () => {
 
   if (!collectionState.currentCollection) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="flex-grow flex items-center justify-center bg-gray-50 p-4">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-dark-800">Collection not found</h2>
           <p className="text-dark-500 mt-2">

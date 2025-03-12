@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -12,7 +13,7 @@ const Footer: React.FC = () => {
           </p>
         </div>
         
-        <div>
+        <div className="flex items-center">
           <a 
             href="https://jeremyvenegas.com" 
             target="_blank" 

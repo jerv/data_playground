@@ -15,6 +15,8 @@ declare module 'react-icons/fi' {
   export const FiMail: IconType;
   export const FiKey: IconType;
   export const FiUserPlus: IconType;
+  export const FiChevronDown: IconType;
+  export const FiMoreVertical: IconType;
 }
 
 declare module 'react-icons' {

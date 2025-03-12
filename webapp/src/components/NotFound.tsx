@@ -5,7 +5,7 @@ import { FiHome } from 'react-icons/fi';
 
 const NotFound: React.FC = () => {
   return (
-    <div className="flex items-center justify-center bg-gray-50 p-4 flex-grow">
+    <div className="flex-grow flex items-center justify-center bg-gray-50 p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

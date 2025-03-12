@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiDatabase, FiEdit, FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiDatabase, FiEdit, FiTrash2, FiPlus, FiMoreVertical } from 'react-icons/fi';
 import { useCollection } from '../hooks/useCollection';
 import CollectionForm from './CollectionForm';
 
@@ -9,14 +9,33 @@ const CollectionList: React.FC = () => {
   const { fetchCollections, deleteCollection, collectionState } = useCollection();
   const [showForm, setShowForm] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchCollections();
   }, [fetchCollections]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const handleDelete = async (id: string) => {
     await deleteCollection(id);
     setConfirmDelete(null);
+  };
+
+  const toggleMenu = (id: string) => {
+    setOpenMenuId(openMenuId === id ? null : id);
   };
 
   const container = {
@@ -129,19 +148,35 @@ const CollectionList: React.FC = () => {
                       <h2 className="text-xl font-bold text-dark-800 mb-2">
                         {collection.name}
                       </h2>
-                      <div className="flex space-x-1">
-                        <Link
-                          to={`/collections/${collection.id}/edit`}
+                      <div className="relative" ref={menuRef}>
+                        <button
+                          onClick={() => toggleMenu(collection.id)}
                           className="p-2 text-dark-500 hover:text-primary-600 hover:bg-gray-100 rounded-md"
                         >
-                          <FiEdit />
-                        </Link>
-                        <button
-                          onClick={() => setConfirmDelete(collection.id)}
-                          className="p-2 text-dark-500 hover:text-red-600 hover:bg-gray-100 rounded-md"
-                        >
-                          <FiTrash2 />
+                          <FiMoreVertical />
                         </button>
+                        {openMenuId === collection.id && (
+                          <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                            <Link
+                              to={`/collections/${collection.id}/edit`}
+                              className="flex items-center px-4 py-2 text-sm text-dark-700 hover:bg-gray-100 hover:text-primary-600"
+                              onClick={() => setOpenMenuId(null)}
+                            >
+                              <FiEdit className="mr-2" />
+                              Edit Collection
+                            </Link>
+                            <button
+                              onClick={() => {
+                                setConfirmDelete(collection.id);
+                                setOpenMenuId(null);
+                              }}
+                              className="flex items-center w-full text-left px-4 py-2 text-sm text-dark-700 hover:bg-gray-100 hover:text-red-600"
+                            >
+                              <FiTrash2 className="mr-2" />
+                              Delete Collection
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -178,7 +213,7 @@ const CollectionList: React.FC = () => {
 
                       <Link
                         to={`/collections/${collection.id}`}
-                        className="btn-primary w-full text-center"
+                        className="btn-primary w-full text-center block"
                       >
                         View Collection
                       </Link>

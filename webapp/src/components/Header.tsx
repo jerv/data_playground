@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiUser, FiLogIn, FiEdit, FiX } from 'react-icons/fi';
+import { FiUser, FiLogIn, FiChevronDown } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 
 const Header: React.FC = () => {
@@ -56,7 +56,7 @@ const Header: React.FC = () => {
             <span className="text-dark-800 hidden sm:inline-block">
               {authState.user?.username}
             </span>
-            <FiEdit className={`transition-transform duration-200 ${isMenuOpen ? 'transform rotate-180' : ''}`} />
+            <FiChevronDown className={`transition-transform duration-200 ${isMenuOpen ? 'transform rotate-180' : ''}`} />
           </button>
 
           {isMenuOpen && (
