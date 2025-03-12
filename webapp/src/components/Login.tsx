@@ -48,7 +48,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-r from-primary-500 to-secondary-600 p-4">
+    <div className="flex items-center justify-center bg-gradient-to-r from-primary-500 to-secondary-600 p-4 flex-grow">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

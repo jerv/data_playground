@@ -11,6 +11,7 @@ import CollectionDetail from './components/CollectionDetail';
 import CollectionEdit from './components/CollectionEdit';
 import NotFound from './components/NotFound';
 import Header from './components/Header';
+import Footer from './components/Footer';
 
 // Protected route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -44,10 +45,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
   
   return (
-    <>
+    <div className="flex flex-col min-h-screen">
       <Header />
-      {children}
-    </>
+      <div className="flex-grow">
+        {children}
+      </div>
+      <Footer />
+    </div>
+  );
+};
+
+// Public route component with footer
+const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <div className="flex flex-col min-h-screen">
+      <div className="flex-grow flex flex-col">
+        {children}
+      </div>
+      <Footer />
+    </div>
   );
 };
 
@@ -55,8 +71,16 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
+      <Route path="/login" element={
+        <PublicRoute>
+          <Login />
+        </PublicRoute>
+      } />
+      <Route path="/register" element={
+        <PublicRoute>
+          <Register />
+        </PublicRoute>
+      } />
       
       <Route path="/profile" element={
         <ProtectedRoute>
@@ -83,7 +107,11 @@ const AppRoutes: React.FC = () => {
       } />
       
       <Route path="/" element={<Navigate to="/playground" />} />
-      <Route path="*" element={<NotFound />} />
+      <Route path="*" element={
+        <PublicRoute>
+          <NotFound />
+        </PublicRoute>
+      } />
     </Routes>
   );
 };
