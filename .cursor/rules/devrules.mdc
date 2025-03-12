@@ -1,0 +1,6 @@
+---
+description: developer rules
+globs: 
+alwaysApply: false
+---
+Dont try to run the app yourself
