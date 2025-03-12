@@ -53,8 +53,9 @@ logs
 *.log
 
 # Editor directories and files
-.idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+.idea
 *.suo
 *.ntvs*
 *.njsproj
@@ -62,8 +63,4 @@ logs
 *.sw?
 
 # Mobile
-/mobile/android/app/build/
-/mobile/android/.gradle/
-/mobile/android/captures/
-/mobile/android/local.properties
-/mobile/android/*.iml 
+.DS_Store 
