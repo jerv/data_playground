@@ -26,6 +26,17 @@ const loginSchema = z.object({
 const profileUpdateSchema = z.object({
   username: z.string().min(3, 'Username must be at least 3 characters').optional(),
   email: z.string().email('Invalid email format').optional(),
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters').optional(),
+}).refine(data => {
+  // If one password field is provided, both must be provided
+  if (data.currentPassword || data.newPassword) {
+    return !!data.currentPassword && !!data.newPassword;
+  }
+  return true;
+}, {
+  message: 'Both current password and new password are required for password change',
+  path: ['currentPassword', 'newPassword'],
 });
 
 // Register a new user
@@ -196,6 +207,30 @@ router.patch('/profile', authenticate, async (req: Request, res: Response) => {
       updateData.email = sanitize(validatedData.email);
     }
 
+    // Handle password change if provided
+    if (validatedData.currentPassword && validatedData.newPassword) {
+      // Verify current password
+      const user = await User.findById(req.user?._id);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found',
+        });
+      }
+
+      const isPasswordValid = await user.comparePassword(validatedData.currentPassword);
+      if (!isPasswordValid) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password is incorrect',
+        });
+      }
+
+      // Set new password
+      user.password = validatedData.newPassword;
+      await user.save(); // This will trigger the pre-save hook to hash the password
+    }
+
     // Check if email or username already exists (if being updated)
     if (updateData.email || updateData.username) {
       const query: any = { _id: { $ne: req.user?._id } };
@@ -218,22 +253,42 @@ router.patch('/profile', authenticate, async (req: Request, res: Response) => {
       }
     }
 
-    // Update user
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user?._id,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
+    // Update user profile fields (if any)
+    if (Object.keys(updateData).length > 0) {
+      const updatedUser = await User.findByIdAndUpdate(
+        req.user?._id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
 
-    return res.status(200).json({
-      success: true,
-      message: 'Profile updated successfully',
-      user: {
-        id: updatedUser?._id,
-        username: updatedUser?.username,
-        email: updatedUser?.email,
-      },
-    });
+      return res.status(200).json({
+        success: true,
+        message: 'Profile updated successfully',
+        user: {
+          id: updatedUser?._id,
+          username: updatedUser?.username,
+          email: updatedUser?.email,
+        },
+      });
+    } else if (validatedData.currentPassword && validatedData.newPassword) {
+      // If only password was updated
+      const user = await User.findById(req.user?._id);
+      return res.status(200).json({
+        success: true,
+        message: 'Password updated successfully',
+        user: {
+          id: user?._id,
+          username: user?.username,
+          email: user?.email,
+        },
+      });
+    } else {
+      // No changes were made
+      return res.status(400).json({
+        success: false,
+        message: 'No changes provided',
+      });
+    }
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({
@@ -245,7 +300,7 @@ router.patch('/profile', authenticate, async (req: Request, res: Response) => {
         })),
       });
     }
-
+    
     return res.status(500).json({
       success: false,
       message: 'Server error updating profile',

@@ -27,4 +27,6 @@ export interface RegisterCredentials {
 export interface ProfileUpdateData {
   username?: string;
   email?: string;
+  currentPassword?: string;
+  newPassword?: string;
 } 

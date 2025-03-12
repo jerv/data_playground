@@ -10,6 +10,7 @@ import CollectionList from './components/CollectionList';
 import CollectionDetail from './components/CollectionDetail';
 import CollectionEdit from './components/CollectionEdit';
 import NotFound from './components/NotFound';
+import Header from './components/Header';
 
 // Protected route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -42,7 +43,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" />;
   }
   
-  return <>{children}</>;
+  return (
+    <>
+      <Header />
+      {children}
+    </>
+  );
 };
 
 // App routes

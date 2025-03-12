@@ -154,7 +154,7 @@ const CollectionList: React.FC = () => {
                     </div>
 
                     <div className="border-t border-gray-200 pt-4">
-                      <div className="mb-3">
+                      <div className="mb-7">
                         <p className="text-xs text-dark-500 uppercase font-medium mb-1">
                           Fields
                         </p>
