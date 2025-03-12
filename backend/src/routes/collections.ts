@@ -77,7 +77,18 @@ router.post('/', async (req: Request, res: Response) => {
 // Get all collections for the current user
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const collections = await Collection.find({ user: req.user?._id });
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const skip = (page - 1) * limit;
+
+    // Get total count for pagination info
+    const totalCount = await Collection.countDocuments({ user: req.user?._id });
+    
+    // Get paginated collections
+    const collections = await Collection.find({ user: req.user?._id })
+      .sort({ _id: -1 }) // Sort by newest first
+      .skip(skip)
+      .limit(limit);
 
     return res.status(200).json({
       success: true,
@@ -87,6 +98,13 @@ router.get('/', async (req: Request, res: Response) => {
         fields: collection.fields,
         entriesCount: collection.entries.length,
       })),
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        pages: Math.ceil(totalCount / limit),
+        hasMore: page * limit < totalCount
+      }
     });
   } catch (error) {
     return res.status(500).json({
