@@ -12,6 +12,7 @@ interface CollectionFormProps {
     fields: Field[];
   };
   onCancel?: () => void;
+  onSuccess?: () => void;
 }
 
 const CollectionForm: React.FC<CollectionFormProps> = ({
@@ -19,6 +20,7 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
   collectionId,
   initialData,
   onCancel,
+  onSuccess,
 }) => {
   const { createCollection, updateCollection, collectionState } = useCollection();
   const [name, setName] = useState(initialData?.name || '');
@@ -135,8 +137,12 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
         
         console.log('API response success:', success);
         
-        if (onCancel && success) {
-          onCancel();
+        if (success) {
+          if (onSuccess) {
+            onSuccess();
+          } else if (onCancel) {
+            onCancel();
+          }
         }
       } catch (error) {
         console.error('Error submitting form:', error);

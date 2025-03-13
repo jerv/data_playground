@@ -8,7 +8,6 @@ import Register from './components/Register';
 import Profile from './components/Profile';
 import CollectionList from './components/CollectionList';
 import CollectionDetail from './components/CollectionDetail';
-import CollectionEdit from './components/CollectionEdit';
 import NotFound from './components/NotFound';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -104,12 +103,6 @@ const AppRoutes: React.FC = () => {
       <Route path="/collections/:id" element={
         <ProtectedRoute>
           <CollectionDetail />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/collections/:id/edit" element={
-        <ProtectedRoute>
-          <CollectionEdit />
         </ProtectedRoute>
       } />
       

@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiDatabase, FiEdit, FiTrash2, FiPlus, FiMoreVertical, FiGrid, FiList, FiX, FiUser } from 'react-icons/fi';
 import { useCollection } from '../hooks/useCollection';
-import CollectionForm from './CollectionForm';
+import { useAuth } from '../hooks/useAuth';
 import Modal from './Modal';
+import CollectionForm from './CollectionForm';
 import ShareCollectionForm from './ShareCollectionForm';
 
 const CollectionList: React.FC = () => {
@@ -18,6 +19,8 @@ const CollectionList: React.FC = () => {
   const [sharingCollectionId, setSharingCollectionId] = useState<string | null>(null);
   const searchDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
+  const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   // Maximum number of fields to display before truncating
   const MAX_FIELDS_TO_SHOW = 5;
@@ -117,6 +120,13 @@ const CollectionList: React.FC = () => {
     event.preventDefault();
     setSharingCollectionId(id);
     setOpenMenuId(null);
+  };
+
+  const handleEditCollection = (id: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setOpenMenuId(null);
+    setEditingCollectionId(id);
+    setShowEditModal(true);
   };
 
   const container = {
@@ -234,17 +244,16 @@ const CollectionList: React.FC = () => {
                 </button>
                 {openMenuId === collection.id && (
                   <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200 dropdown-menu">
-                    <Link
-                      to={`/collections/${collection.id}/edit`}
-                      className="flex items-center px-4 py-2 text-sm text-dark-700 hover:bg-gray-100 hover:text-primary-600"
+                    <button
+                      className="flex items-center px-4 py-2 text-sm text-dark-700 hover:bg-gray-100 hover:text-primary-600 w-full text-left"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenMenuId(null);
+                        handleEditCollection(collection.id, e);
                       }}
                     >
                       <FiEdit className="mr-2" />
                       Edit Collection
-                    </Link>
+                    </button>
                     {(collection.isOwner || collection.accessLevel === 'admin') && (
                       <Link
                         to="#"
@@ -379,14 +388,16 @@ const CollectionList: React.FC = () => {
               </button>
               {openMenuId === collection.id && (
                 <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200 dropdown-menu">
-                  <Link
-                    to={`/collections/${collection.id}/edit`}
-                    className="flex items-center px-4 py-2 text-sm text-dark-700 hover:bg-gray-100 hover:text-primary-600"
-                    onClick={() => setOpenMenuId(null)}
+                  <button
+                    className="flex items-center px-4 py-2 text-sm text-dark-700 hover:bg-gray-100 hover:text-primary-600 w-full text-left"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditCollection(collection.id, e);
+                    }}
                   >
                     <FiEdit className="mr-2" />
                     Edit Collection
-                  </Link>
+                  </button>
                   {(collection.isOwner || collection.accessLevel === 'admin') && (
                     <Link
                       to="#"
@@ -519,6 +530,29 @@ const CollectionList: React.FC = () => {
             />
           )}
         </Modal>
+
+        {/* Edit Collection Modal */}
+        {showEditModal && editingCollectionId && (
+          <Modal
+            isOpen={showEditModal}
+            onClose={() => setShowEditModal(false)}
+            title="Edit Collection"
+          >
+            <CollectionForm
+              isEditing={true}
+              collectionId={editingCollectionId}
+              initialData={{
+                name: collectionState.collections.find(c => c.id === editingCollectionId)?.name || '',
+                fields: collectionState.collections.find(c => c.id === editingCollectionId)?.fields || [],
+              }}
+              onCancel={() => setShowEditModal(false)}
+              onSuccess={() => {
+                setShowEditModal(false);
+                fetchCollections();
+              }}
+            />
+          </Modal>
+        )}
 
         {collectionState.isLoading && collectionState.collections.length === 0 && !showForm ? (
           <div className="flex justify-center py-12">

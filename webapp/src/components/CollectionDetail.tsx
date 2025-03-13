@@ -7,6 +7,7 @@ import EntryForm from './EntryForm';
 import StarRating from './StarRating';
 import ShareCollectionForm from './ShareCollectionForm';
 import Modal from './Modal';
+import CollectionForm from './CollectionForm';
 
 const CollectionDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +16,7 @@ const CollectionDetail: React.FC = () => {
   const { fetchCollection, deleteCollection, deleteEntry, collectionState } = useCollection();
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [editingEntryIndex, setEditingEntryIndex] = useState<number | null>(null);
   const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<number | null>(null);
   const [confirmDeleteCollection, setConfirmDeleteCollection] = useState(false);
@@ -156,13 +158,13 @@ const CollectionDetail: React.FC = () => {
             )}
             {(isOwner || collection.accessLevel === 'admin') && (
               <>
-                <Link
-                  to={`/collections/${id}/edit`}
+                <button
+                  onClick={() => setShowEditModal(true)}
                   className="btn-secondary flex items-center"
                 >
                   <FiEdit className="mr-2" />
                   Edit Collection
-                </Link>
+                </button>
                 {isOwner && (
                   <button
                     onClick={() => setConfirmDeleteCollection(true)}
@@ -409,6 +411,29 @@ const CollectionDetail: React.FC = () => {
           onClose={() => setShowShareModal(false)}
         />
       </Modal>
+
+      {/* Edit Collection Modal */}
+      {showEditModal && (
+        <Modal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          title="Edit Collection"
+        >
+          <CollectionForm
+            isEditing={true}
+            collectionId={id}
+            initialData={{
+              name: collection.name,
+              fields: collection.fields,
+            }}
+            onCancel={() => setShowEditModal(false)}
+            onSuccess={() => {
+              setShowEditModal(false);
+              fetchCollection(id!);
+            }}
+          />
+        </Modal>
+      )}
     </div>
   );
 };
