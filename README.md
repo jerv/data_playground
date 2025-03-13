@@ -10,6 +10,9 @@ A React-based web application for managing collections and entries with a modern
 - Real-time notifications using React Hot Toast
 - Context-based state management
 - RESTful API integration
+- User authentication and profile management
+- Collection sharing and collaboration with customizable access levels
+- Support for multiple field types (text, number, date, rating, time)
 
 ## 🛠️ Tech Stack
 
@@ -18,6 +21,9 @@ A React-based web application for managing collections and entries with a modern
 - React Context API for state management
 - React Hot Toast for notifications
 - RESTful API integration
+- JWT for authentication
+- MongoDB with Mongoose for data storage
+- Zod for validation
 
 ## 📋 Prerequisites
 
@@ -72,11 +78,13 @@ webapp/
 ├── src/
 │   ├── components/     # React components
 │   ├── hooks/         # Custom React hooks
-│   │   └── useCollection.tsx  # Collection management hook
+│   │   ├── useCollection.tsx  # Collection management hook
+│   │   └── useAuth.tsx        # Authentication hook
 │   ├── services/      # API services
 │   │   └── api.ts     # API integration
 │   ├── types/         # TypeScript type definitions
-│   │   └── collection.ts
+│   │   ├── collection.ts
+│   │   └── user.ts
 │   └── App.tsx        # Root component
 ├── public/            # Static files
 └── package.json       # Project dependencies and scripts
@@ -84,12 +92,22 @@ webapp/
 
 ## 🔄 State Management
 
-The application uses React Context API for state management. The main state provider is `CollectionProvider` which manages:
+The application uses React Context API for state management. The main state providers are:
 
+### Collection Provider
+Manages:
 - Collections list
 - Current collection
 - Loading states
 - Error handling
+- Collection sharing
+
+### Auth Provider
+Manages:
+- User authentication state
+- Login/logout functionality
+- User profile data
+- Token management
 
 ### Using the Collection Context
 
@@ -101,6 +119,7 @@ function MyComponent() {
     collectionState, 
     fetchCollections,
     createCollection,
+    shareCollection,
     // ... other methods
   } = useCollection();
   
@@ -108,10 +127,29 @@ function MyComponent() {
 }
 ```
 
+### Using the Auth Context
+
+```typescript
+import { useAuth } from '../hooks/useAuth';
+
+function MyComponent() {
+  const {
+    authState,
+    login,
+    register,
+    logout,
+    updateProfile
+  } = useAuth();
+  
+  // Use the auth methods and state
+}
+```
+
 ## 🔌 API Integration
 
-The application communicates with a backend API through the `collectionsAPI` service. Available endpoints:
+The application communicates with a backend API through various services:
 
+### Collections API
 - `GET /collections` - Fetch all collections
 - `GET /collections/:id` - Fetch single collection
 - `POST /collections` - Create collection
@@ -120,6 +158,33 @@ The application communicates with a backend API through the `collectionsAPI` ser
 - `POST /collections/:id/entries` - Add entry
 - `PUT /collections/:id/entries/:index` - Update entry
 - `DELETE /collections/:id/entries/:index` - Delete entry
+- `POST /collections/:id/share` - Share collection with a user
+- `DELETE /collections/:id/share/:email` - Remove share access
+- `GET /collections/:id/share` - Get all users with whom the collection is shared
+
+### Auth API
+- `POST /auth/register` - Register a new user
+- `POST /auth/login` - Login user
+- `GET /auth/profile` - Get current user profile
+- `PATCH /auth/profile` - Update user profile
+
+## 📊 Field Types
+
+The application supports the following field types:
+
+- **Text**: For storing text data like names, descriptions, etc.
+- **Number**: For storing numerical values
+- **Date**: For storing date values
+- **Rating**: For storing rating values
+- **Time**: For storing time values
+
+## 👥 Collaboration Features
+
+The application supports sharing collections with other users with different access levels:
+
+- **Read**: Users can only view the collection and its entries
+- **Write**: Users can view and modify entries, but cannot change collection structure
+- **Admin**: Users have full control over the collection, including sharing with others
 
 ## 🧪 Development Guidelines
 
@@ -130,6 +195,7 @@ The application communicates with a backend API through the `collectionsAPI` ser
 
 2. **State Management**
    - Use the Collection context for collection-related state
+   - Use the Auth context for authentication-related state
    - Utilize local state for component-specific data
    - Handle loading and error states appropriately
 
