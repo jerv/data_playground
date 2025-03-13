@@ -17,6 +17,8 @@ declare module 'react-icons/fi' {
   export const FiUserPlus: IconType;
   export const FiChevronDown: IconType;
   export const FiMoreVertical: IconType;
+  export const FiGrid: IconType;
+  export const FiList: IconType;
 }
 
 declare module 'react-icons' {

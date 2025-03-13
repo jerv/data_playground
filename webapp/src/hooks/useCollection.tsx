@@ -1,7 +1,16 @@
 import React, { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
-import { Collection, CollectionFormData, Entry, CollectionState } from '../types/collection';
+import { Collection, CollectionFormData, Entry, CollectionState, PaginationInfo, ShareFormData, SharedUser } from '../types/collection';
 import { collectionsAPI } from '../services/api';
+
+// Initial pagination state
+const initialPagination: PaginationInfo = {
+  total: 0,
+  page: 1,
+  limit: 10,
+  pages: 0,
+  hasMore: false
+};
 
 // Initial collection state
 const initialState: CollectionState = {
@@ -9,26 +18,36 @@ const initialState: CollectionState = {
   currentCollection: null,
   isLoading: false,
   error: null,
+  pagination: initialPagination,
+  searchTerm: ''
 };
 
 // Create context
 export const CollectionContext = createContext<{
   collectionState: CollectionState;
-  fetchCollections: () => Promise<void>;
+  fetchCollections: (page?: number, reset?: boolean, search?: string) => Promise<void>;
+  setSearchTerm: (search: string) => void;
   fetchCollection: (id: string) => Promise<void>;
-  createCollection: (data: CollectionFormData) => Promise<void>;
-  updateCollection: (id: string, data: CollectionFormData) => Promise<void>;
+  createCollection: (data: CollectionFormData) => Promise<boolean>;
+  updateCollection: (id: string, data: CollectionFormData) => Promise<boolean>;
   deleteCollection: (id: string) => Promise<void>;
+  shareCollection: (id: string, data: ShareFormData) => Promise<SharedUser[] | null>;
+  getSharedUsers: (id: string) => Promise<SharedUser[] | null>;
+  removeSharedUser: (id: string, email: string) => Promise<SharedUser[] | null>;
   addEntry: (collectionId: string, entry: Entry) => Promise<void>;
   updateEntry: (collectionId: string, entryIndex: number, entry: Entry) => Promise<void>;
   deleteEntry: (collectionId: string, entryIndex: number) => Promise<void>;
 }>({
   collectionState: initialState,
   fetchCollections: async () => {},
+  setSearchTerm: () => {},
   fetchCollection: async () => {},
-  createCollection: async () => {},
-  updateCollection: async () => {},
+  createCollection: async () => false,
+  updateCollection: async () => false,
   deleteCollection: async () => {},
+  shareCollection: async () => null,
+  getSharedUsers: async () => null,
+  removeSharedUser: async () => null,
   addEntry: async () => {},
   updateEntry: async () => {},
   deleteEntry: async () => {},
@@ -38,27 +57,60 @@ export const CollectionContext = createContext<{
 export const CollectionProvider = ({ children }: { children: React.ReactNode }) => {
   const [collectionState, setCollectionState] = useState<CollectionState>(initialState);
 
-  // Fetch all collections
-  const fetchCollections = useCallback(async () => {
+  // Set search term
+  const setSearchTerm = useCallback((search: string) => {
+    setCollectionState(prev => ({
+      ...prev,
+      searchTerm: search
+    }));
+  }, []);
+
+  // Fetch collections with pagination and search
+  const fetchCollections = useCallback(async (page = 1, reset = false, search?: string) => {
     try {
       setCollectionState(prev => ({ ...prev, isLoading: true }));
-      const { collections } = await collectionsAPI.getCollections();
-      setCollectionState(prev => ({
-        ...prev,
-        collections,
-        isLoading: false,
-        error: null,
-      }));
+      
+      // Use provided search term or the one from state
+      const searchTerm = search !== undefined ? search : collectionState.searchTerm;
+      
+      const response = await collectionsAPI.getCollections(page, initialPagination.limit, searchTerm);
+      
+      // Ensure we have pagination data with defaults if missing
+      const pagination = response.pagination || {
+        ...initialPagination,
+        page,
+        hasMore: false
+      };
+      
+      setCollectionState(prev => {
+        // If reset is true or it's the first page, replace collections
+        // Otherwise append new collections to the existing ones
+        const updatedCollections = page === 1 || reset
+          ? response.collections || []
+          : [...prev.collections, ...(response.collections || [])];
+          
+        return {
+          ...prev,
+          collections: updatedCollections,
+          pagination,
+          isLoading: false,
+          error: null,
+          // Update search term if explicitly provided
+          searchTerm: search !== undefined ? search : prev.searchTerm
+        };
+      });
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Failed to fetch collections';
       setCollectionState(prev => ({
         ...prev,
         isLoading: false,
         error: errorMessage,
+        // Keep existing pagination data on error
+        pagination: prev.pagination
       }));
       toast.error(errorMessage);
     }
-  }, []);
+  }, [collectionState.searchTerm]);
 
   // Fetch a single collection
   const fetchCollection = useCallback(async (id: string) => {
@@ -84,9 +136,23 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
 
   // Create a new collection
   const createCollection = useCallback(async (data: CollectionFormData) => {
+    console.log('useCollection: Creating collection with data:', JSON.stringify(data, null, 2));
     try {
-      setCollectionState(prev => ({ ...prev, isLoading: true }));
-      const { collection } = await collectionsAPI.createCollection(data);
+      setCollectionState(prev => ({ ...prev, isLoading: true, error: null }));
+      
+      // Ensure field names are trimmed and field types are valid
+      const processedData = {
+        ...data,
+        fields: data.fields.map(field => ({
+          name: field.name.trim(),
+          type: field.type
+        }))
+      };
+      
+      console.log('useCollection: Processed data:', JSON.stringify(processedData, null, 2));
+      
+      const { collection } = await collectionsAPI.createCollection(processedData);
+      console.log('useCollection: Collection created successfully:', collection);
       setCollectionState(prev => ({
         ...prev,
         collections: [...prev.collections, collection],
@@ -94,14 +160,36 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
         error: null,
       }));
       toast.success('Collection created successfully');
+      return true;
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Failed to create collection';
+      console.error('useCollection: Error creating collection:', error);
+      console.error('useCollection: Error response:', error.response?.data);
+      
+      let errorMessage = 'Failed to create collection';
+      
+      if (error.response?.data?.errors && error.response.data.errors.length > 0) {
+        // Format validation errors
+        errorMessage = error.response.data.errors.map((err: any) => {
+          // Make field path more user-friendly
+          let fieldName = err.field;
+          if (fieldName.startsWith('fields.') && fieldName.includes('.type')) {
+            const index = parseInt(fieldName.split('.')[1]);
+            const fieldLabel = data.fields[index]?.name || `Field ${index + 1}`;
+            return `${fieldLabel}: ${err.message}`;
+          }
+          return `${err.field}: ${err.message}`;
+        }).join(', ');
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       setCollectionState(prev => ({
         ...prev,
         isLoading: false,
         error: errorMessage,
       }));
       toast.error(errorMessage);
+      return false;
     }
   }, []);
 
@@ -127,6 +215,7 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
       });
       
       toast.success('Collection updated successfully');
+      return true;
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Failed to update collection';
       setCollectionState(prev => ({
@@ -135,6 +224,7 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
         error: errorMessage,
       }));
       toast.error(errorMessage);
+      return false;
     }
   }, []);
 
@@ -168,6 +258,109 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
       toast.error(errorMessage);
     }
   }, []);
+
+  // Share a collection with a user
+  const shareCollection = useCallback(async (id: string, data: ShareFormData) => {
+    try {
+      setCollectionState(prev => ({ ...prev, isLoading: true }));
+      const response = await collectionsAPI.shareCollection(id, data);
+      
+      // Update current collection if it's the one being shared
+      if (collectionState.currentCollection && collectionState.currentCollection.id === id) {
+        setCollectionState(prev => ({
+          ...prev,
+          currentCollection: {
+            ...prev.currentCollection!,
+            sharedWith: response.sharedWith,
+          },
+          isLoading: false,
+          error: null,
+        }));
+      } else {
+        setCollectionState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: null,
+        }));
+      }
+      
+      toast.success(`Collection shared with ${data.email} successfully`);
+      return response.sharedWith;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Failed to share collection';
+      setCollectionState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: errorMessage,
+      }));
+      toast.error(errorMessage);
+      return null;
+    }
+  }, [collectionState.currentCollection]);
+
+  // Get shared users for a collection
+  const getSharedUsers = useCallback(async (id: string) => {
+    try {
+      setCollectionState(prev => ({ ...prev, isLoading: true }));
+      const response = await collectionsAPI.getSharedUsers(id);
+      
+      setCollectionState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: null,
+      }));
+      
+      return response.sharedWith;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Failed to get shared users';
+      setCollectionState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: errorMessage,
+      }));
+      toast.error(errorMessage);
+      return null;
+    }
+  }, []);
+
+  // Remove shared access for a user
+  const removeSharedUser = useCallback(async (id: string, email: string) => {
+    try {
+      setCollectionState(prev => ({ ...prev, isLoading: true }));
+      const response = await collectionsAPI.removeSharedUser(id, email);
+      
+      // Update current collection if it's the one being modified
+      if (collectionState.currentCollection && collectionState.currentCollection.id === id) {
+        setCollectionState(prev => ({
+          ...prev,
+          currentCollection: {
+            ...prev.currentCollection!,
+            sharedWith: response.sharedWith,
+          },
+          isLoading: false,
+          error: null,
+        }));
+      } else {
+        setCollectionState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: null,
+        }));
+      }
+      
+      toast.success(`Share access removed for ${email}`);
+      return response.sharedWith;
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || 'Failed to remove shared access';
+      setCollectionState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: errorMessage,
+      }));
+      toast.error(errorMessage);
+      return null;
+    }
+  }, [collectionState.currentCollection]);
 
   // Add an entry to a collection
   const addEntry = useCallback(async (collectionId: string, entry: Entry) => {
@@ -299,19 +492,21 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
   }, []);
 
   return (
-    <CollectionContext.Provider 
-      value={{ 
-        collectionState, 
-        fetchCollections, 
-        fetchCollection, 
-        createCollection, 
-        updateCollection, 
-        deleteCollection, 
-        addEntry, 
-        updateEntry, 
-        deleteEntry 
-      }}
-    >
+    <CollectionContext.Provider value={{ 
+      collectionState, 
+      fetchCollections, 
+      setSearchTerm,
+      fetchCollection, 
+      createCollection, 
+      updateCollection, 
+      deleteCollection, 
+      shareCollection,
+      getSharedUsers,
+      removeSharedUser,
+      addEntry, 
+      updateEntry, 
+      deleteEntry 
+    }}>
       {children}
     </CollectionContext.Provider>
   );

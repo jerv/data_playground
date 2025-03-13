@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useCollection } from '../hooks/useCollection';
 import CollectionForm from './CollectionForm';
+import Modal from './Modal';
 
 const CollectionEdit: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -57,9 +58,12 @@ const CollectionEdit: React.FC = () => {
   }
 
   return (
-    <div className="bg-gray-50 py-12 px-4">
-      <div className="max-w-md mx-auto">
-        <h1 className="text-3xl font-bold text-dark-800 mb-6">Edit Collection</h1>
+    <div className="bg-gray-50 py-12 px-4 flex-grow flex items-center justify-center">
+      <Modal
+        isOpen={true}
+        onClose={() => navigate(`/collections/${id}`)}
+        title="Edit Collection"
+      >
         <CollectionForm
           isEditing={true}
           collectionId={id}
@@ -69,7 +73,7 @@ const CollectionEdit: React.FC = () => {
           }}
           onCancel={() => navigate(`/collections/${id}`)}
         />
-      </div>
+      </Modal>
     </div>
   );
 };

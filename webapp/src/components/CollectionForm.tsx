@@ -64,14 +64,33 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
+    const fieldNames = new Set<string>();
     
     if (!name.trim()) {
       newErrors.name = 'Collection name is required';
     }
     
+    // Check if any fields are empty
+    const emptyFields = fields.some(field => !field.name.trim());
+    if (emptyFields) {
+      fields.forEach((field, index) => {
+        if (!field.name.trim()) {
+          newErrors[`field-${index}`] = 'Field name is required';
+        }
+      });
+      
+      setErrors(newErrors);
+      return false;
+    }
+    
+    // Check for duplicate field names
     fields.forEach((field, index) => {
-      if (!field.name.trim()) {
-        newErrors[`field-${index}`] = 'Field name is required';
+      const trimmedName = field.name.trim().toLowerCase();
+      
+      if (fieldNames.has(trimmedName)) {
+        newErrors[`field-${index}`] = 'Field names must be unique';
+      } else {
+        fieldNames.add(trimmedName);
       }
     });
     
@@ -82,24 +101,48 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    console.log('Form data before validation:', { name, fields });
+    
     if (validateForm()) {
+      // Ensure field types are valid strings from the enum
+      const validFieldTypes: FieldType[] = ['text', 'number', 'date', 'rating', 'time'];
+      
       const data = {
         name,
-        fields: fields.map(field => ({
-          name: field.name.trim(),
-          type: field.type,
-        })),
+        fields: fields.map(field => {
+          // Ensure the field type is valid
+          const fieldType = validFieldTypes.includes(field.type as FieldType) 
+            ? field.type 
+            : 'text'; // Default to text if invalid
+          
+          return {
+            name: field.name.trim(),
+            type: fieldType,
+          };
+        }),
       };
       
-      if (isEditing && collectionId) {
-        await updateCollection(collectionId, data);
-      } else {
-        await createCollection(data);
-      }
+      console.log('Submitting data to API:', data);
       
-      if (onCancel && !collectionState.error) {
-        onCancel();
+      let success = false;
+      
+      try {
+        if (isEditing && collectionId) {
+          success = await updateCollection(collectionId, data);
+        } else {
+          success = await createCollection(data);
+        }
+        
+        console.log('API response success:', success);
+        
+        if (onCancel && success) {
+          onCancel();
+        }
+      } catch (error) {
+        console.error('Error submitting form:', error);
       }
+    } else {
+      console.log('Validation failed. Errors:', errors);
     }
   };
 
@@ -108,12 +151,7 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="card"
     >
-      <h2 className="text-2xl font-bold mb-6">
-        {isEditing ? 'Edit Collection' : 'Create New Collection'}
-      </h2>
-      
       <form onSubmit={handleSubmit}>
         <div className="mb-6">
           <label htmlFor="name" className="form-label">
@@ -169,7 +207,16 @@ const CollectionForm: React.FC<CollectionFormProps> = ({
                   <option value="text">Text</option>
                   <option value="number">Number</option>
                   <option value="date">Date</option>
+                  <option value="time">Time (HH:MM)</option>
+                  <option value="rating">Rating (0-5)</option>
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {field.type === 'text' && 'Free text input'}
+                  {field.type === 'number' && 'Numeric values only'}
+                  {field.type === 'date' && 'Date picker'}
+                  {field.type === 'time' && '24-hour format (HH:MM)'}
+                  {field.type === 'rating' && 'Star rating from 0 to 5'}
+                </p>
               </div>
               
               <div>

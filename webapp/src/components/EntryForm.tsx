@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { FiSave, FiX, FiPlus } from 'react-icons/fi';
 import { useCollection } from '../hooks/useCollection';
 import { Field, Entry } from '../types/collection';
+import StarRating from './StarRating';
 
 interface EntryFormProps {
   collectionId: string;
@@ -22,19 +23,32 @@ const EntryForm: React.FC<EntryFormProps> = ({
   const { addEntry, updateEntry, collectionState } = useCollection();
   const [formData, setFormData] = useState<Entry>(
     initialData || fields.reduce((acc, field) => {
-      acc[field.name] = field.type === 'number' ? 0 : '';
+      if (field.type === 'number' || field.type === 'rating') {
+        acc[field.name] = field.type === 'rating' ? 0 : '';
+      } else if (field.type === 'time') {
+        acc[field.name] = '';
+      } else {
+        acc[field.name] = '';
+      }
       return acc;
     }, {} as Entry)
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleChange = (fieldName: string, fieldType: string, value: string) => {
+  const handleChange = (fieldName: string, fieldType: string, value: string | number) => {
     let processedValue: string | number = value;
     
-    // Convert to number if field type is number
-    if (fieldType === 'number' && value !== '') {
+    // Process value based on field type
+    if (fieldType === 'number' && typeof value === 'string' && value !== '') {
       processedValue = Number(value);
+    } else if (fieldType === 'rating' && typeof value === 'number') {
+      processedValue = value;
+    } else if (fieldType === 'time' && typeof value === 'string') {
+      // Ensure time format is valid
+      processedValue = value;
     }
+    
+    console.log(`Field change: ${fieldName} (${fieldType}) = ${processedValue}`);
     
     setFormData(prev => ({
       ...prev,
@@ -63,6 +77,22 @@ const EntryForm: React.FC<EntryFormProps> = ({
         }
       } else if (field.type === 'date' && (!value || String(value).trim() === '')) {
         newErrors[field.name] = `${field.name} is required`;
+      } else if (field.type === 'rating') {
+        // Rating is optional, but if provided must be a number between 0-5
+        if (value !== '' && value !== undefined) {
+          const ratingValue = Number(value);
+          if (isNaN(ratingValue)) {
+            newErrors[field.name] = `${field.name} must be a number`;
+          } else if (ratingValue < 0 || ratingValue > 5) {
+            newErrors[field.name] = `${field.name} must be between 0 and 5`;
+          }
+        }
+      } else if (field.type === 'time') {
+        if (!value || String(value).trim() === '') {
+          newErrors[field.name] = `${field.name} is required`;
+        } else if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(String(value))) {
+          newErrors[field.name] = `${field.name} must be in format HH:MM`;
+        }
       }
     });
     
@@ -77,10 +107,16 @@ const EntryForm: React.FC<EntryFormProps> = ({
       // Process data for submission
       const processedData: Entry = { ...formData };
       
-      // Convert date strings to Date objects for the API
+      // Process data based on field types
       fields.forEach(field => {
         if (field.type === 'date' && processedData[field.name]) {
           processedData[field.name] = new Date(processedData[field.name]);
+        } else if (field.type === 'number' && processedData[field.name] === '') {
+          // Convert empty string to 0 for number fields
+          processedData[field.name] = 0;
+        } else if (field.type === 'rating' && (processedData[field.name] === '' || processedData[field.name] === undefined)) {
+          // Ensure rating is a number
+          processedData[field.name] = 0;
         }
       });
       
@@ -93,6 +129,24 @@ const EntryForm: React.FC<EntryFormProps> = ({
       if (!collectionState.error) {
         onCancel();
       }
+    }
+  };
+
+  // Helper function to render field guidance text
+  const renderFieldGuidance = (fieldType: string) => {
+    switch (fieldType) {
+      case 'text':
+        return <p className="text-xs text-gray-500 mt-1">Enter any text value</p>;
+      case 'number':
+        return <p className="text-xs text-gray-500 mt-1">Enter a numeric value</p>;
+      case 'date':
+        return <p className="text-xs text-gray-500 mt-1">Select a date from the calendar</p>;
+      case 'time':
+        return <p className="text-xs text-gray-500 mt-1">Enter time in 24-hour format (HH:MM)</p>;
+      case 'rating':
+        return <p className="text-xs text-gray-500 mt-1">Click on stars to set rating (0-5)</p>;
+      default:
+        return null;
     }
   };
 
@@ -109,48 +163,90 @@ const EntryForm: React.FC<EntryFormProps> = ({
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           {fields.map((field, index) => (
-            <div key={index}>
-              <label htmlFor={field.name} className="form-label">
+            <div key={index} className="mb-2">
+              <label htmlFor={field.name} className="form-label flex items-center">
                 {field.name}
+                <span className="ml-2 text-xs text-gray-500 italic">({field.type})</span>
               </label>
               
               {field.type === 'text' && (
-                <input
-                  type="text"
-                  id={field.name}
-                  value={formData[field.name] as string}
-                  onChange={e => handleChange(field.name, field.type, e.target.value)}
-                  className={`form-input ${
-                    errors[field.name] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
-                  }`}
-                />
+                <div>
+                  <input
+                    type="text"
+                    id={field.name}
+                    value={formData[field.name] as string}
+                    onChange={e => handleChange(field.name, field.type, e.target.value)}
+                    className={`form-input ${
+                      errors[field.name] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                    }`}
+                    placeholder="Enter text"
+                  />
+                  {renderFieldGuidance(field.type)}
+                </div>
               )}
               
               {field.type === 'number' && (
-                <input
-                  type="number"
-                  id={field.name}
-                  value={formData[field.name] as number}
-                  onChange={e => handleChange(field.name, field.type, e.target.value)}
-                  className={`form-input ${
-                    errors[field.name] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
-                  }`}
-                />
+                <div>
+                  <input
+                    type="number"
+                    id={field.name}
+                    value={formData[field.name] as number}
+                    onChange={e => handleChange(field.name, field.type, e.target.value)}
+                    className={`form-input ${
+                      errors[field.name] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                    }`}
+                    placeholder="Enter a number"
+                    step="any"
+                  />
+                  {renderFieldGuidance(field.type)}
+                </div>
               )}
               
               {field.type === 'date' && (
-                <input
-                  type="date"
-                  id={field.name}
-                  value={formData[field.name] as string}
-                  onChange={e => handleChange(field.name, field.type, e.target.value)}
-                  className={`form-input ${
-                    errors[field.name] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
-                  }`}
-                />
+                <div>
+                  <input
+                    type="date"
+                    id={field.name}
+                    value={formData[field.name] as string}
+                    onChange={e => handleChange(field.name, field.type, e.target.value)}
+                    className={`form-input ${
+                      errors[field.name] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                    }`}
+                  />
+                  {renderFieldGuidance(field.type)}
+                </div>
               )}
               
-              {errors[field.name] && <p className="form-error">{errors[field.name]}</p>}
+              {field.type === 'time' && (
+                <div>
+                  <input
+                    type="time"
+                    id={field.name}
+                    value={formData[field.name] as string}
+                    onChange={e => handleChange(field.name, field.type, e.target.value)}
+                    className={`form-input ${
+                      errors[field.name] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                    }`}
+                    placeholder="HH:MM"
+                  />
+                  {renderFieldGuidance(field.type)}
+                </div>
+              )}
+              
+              {field.type === 'rating' && (
+                <div className={`p-2 rounded-md ${errors[field.name] ? 'border border-red-500' : 'border border-gray-200'}`}>
+                  <StarRating
+                    value={Number(formData[field.name]) || 0}
+                    onChange={value => handleChange(field.name, field.type, value)}
+                    disabled={collectionState.isLoading}
+                  />
+                  {renderFieldGuidance(field.type)}
+                </div>
+              )}
+              
+              {errors[field.name] && (
+                <p className="form-error">{errors[field.name]}</p>
+              )}
             </div>
           ))}
         </div>

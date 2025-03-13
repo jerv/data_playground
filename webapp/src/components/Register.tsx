@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiUser, FiMail, FiLock, FiKey, FiUserPlus } from 'react-icons/fi';
@@ -15,6 +15,13 @@ const Register: React.FC = () => {
     registrationCode: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Check if user is already logged in and redirect to playground
+  useEffect(() => {
+    if (authState.isAuthenticated && !authState.isLoading) {
+      navigate('/playground');
+    }
+  }, [authState.isAuthenticated, authState.isLoading, navigate]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;

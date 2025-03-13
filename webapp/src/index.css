@@ -41,6 +41,10 @@
     @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
   }
   
+  .btn-outline {
+    @apply btn border border-primary-600 text-primary-600 bg-white hover:bg-primary-50 focus:ring-primary-500;
+  }
+  
   .card {
     @apply bg-white rounded-lg shadow-card p-6 transition-all duration-200;
   }

@@ -1,15 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiArrowLeft, FiEdit, FiTrash2, FiPlus } from 'react-icons/fi';
+import { FiArrowLeft, FiEdit, FiTrash2, FiPlus, FiUser } from 'react-icons/fi';
 import { useCollection } from '../hooks/useCollection';
 import EntryForm from './EntryForm';
+import StarRating from './StarRating';
+import ShareCollectionForm from './ShareCollectionForm';
+import Modal from './Modal';
 
 const CollectionDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { fetchCollection, deleteCollection, deleteEntry, collectionState } = useCollection();
   const [showEntryForm, setShowEntryForm] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
   const [editingEntryIndex, setEditingEntryIndex] = useState<number | null>(null);
   const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<number | null>(null);
   const [confirmDeleteCollection, setConfirmDeleteCollection] = useState(false);
@@ -18,7 +23,31 @@ const CollectionDetail: React.FC = () => {
     if (id) {
       fetchCollection(id);
     }
-  }, [id, fetchCollection]);
+    
+    // Debug logs
+    console.log('Location state:', location.state);
+    console.log('Location search:', location.search);
+    
+    // Check if we should open the share modal from location state
+    if (location.state?.openShareModal) {
+      console.log('Opening share modal from state');
+      setShowShareModal(true);
+      // Clear the state to prevent reopening on refresh
+      navigate(location.pathname, { replace: true });
+    }
+    
+    // Check if we should open the share modal from URL query parameter
+    const searchParams = new URLSearchParams(location.search);
+    console.log('Share param:', searchParams.get('share'));
+    if (searchParams.get('share') === 'true') {
+      console.log('Opening share modal from query parameter');
+      setShowShareModal(true);
+      // Clear the query parameter to prevent reopening on refresh
+      setTimeout(() => {
+        navigate(location.pathname, { replace: true });
+      }, 100);
+    }
+  }, [id, fetchCollection, location, navigate]);
 
   const handleDeleteEntry = async (entryIndex: number) => {
     if (id) {
@@ -34,6 +63,17 @@ const CollectionDetail: React.FC = () => {
         navigate('/playground');
       }
     }
+  };
+
+  // Helper function to format date
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
   };
 
   if (collectionState.isLoading && !collectionState.currentCollection) {
@@ -78,6 +118,9 @@ const CollectionDetail: React.FC = () => {
 
   const collection = collectionState.currentCollection;
   const entries = collection.entries || [];
+  const isOwner = collection.isOwner === true;
+  const canEdit = isOwner || collection.accessLevel === 'admin' || collection.accessLevel === 'write';
+  const canShare = isOwner || collection.accessLevel === 'admin';
 
   return (
     <div className="bg-gray-50 py-12 px-4">
@@ -90,24 +133,47 @@ const CollectionDetail: React.FC = () => {
             >
               <FiArrowLeft size={20} />
             </Link>
-            <h1 className="text-2xl md:text-3xl font-bold text-dark-800">{collection.name}</h1>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold text-dark-800">{collection.name}</h1>
+              <p className="text-dark-500 text-sm mt-1">Created: {formatDate(collection.createdAt)}</p>
+              {!isOwner && (
+                <p className="text-primary-600 text-sm mt-1">
+                  Shared with you ({collection.accessLevel} access)
+                </p>
+              )}
+            </div>
           </div>
           
-          <div className="flex space-x-3">
-            <Link
-              to={`/collections/${id}/edit`}
-              className="btn-secondary flex items-center"
-            >
-              <FiEdit className="mr-2" />
-              Edit Collection
-            </Link>
-            <button
-              onClick={() => setConfirmDeleteCollection(true)}
-              className="btn-danger flex items-center"
-            >
-              <FiTrash2 className="mr-2" />
-              Delete
-            </button>
+          <div className="flex flex-wrap gap-2">
+            {canShare && (
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="btn-secondary flex items-center"
+              >
+                <FiUser className="mr-2" />
+                Share
+              </button>
+            )}
+            {(isOwner || collection.accessLevel === 'admin') && (
+              <>
+                <Link
+                  to={`/collections/${id}/edit`}
+                  className="btn-secondary flex items-center"
+                >
+                  <FiEdit className="mr-2" />
+                  Edit Collection
+                </Link>
+                {isOwner && (
+                  <button
+                    onClick={() => setConfirmDeleteCollection(true)}
+                    className="btn-danger flex items-center"
+                  >
+                    <FiTrash2 className="mr-2" />
+                    Delete
+                  </button>
+                )}
+              </>
+            )}
           </div>
         </div>
 
@@ -149,7 +215,13 @@ const CollectionDetail: React.FC = () => {
                       ? 'bg-blue-100 text-blue-800'
                       : field.type === 'number'
                       ? 'bg-green-100 text-green-800'
-                      : 'bg-purple-100 text-purple-800'
+                      : field.type === 'date'
+                      ? 'bg-purple-100 text-purple-800'
+                      : field.type === 'time'
+                      ? 'bg-indigo-100 text-indigo-800'
+                      : field.type === 'rating'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-gray-100 text-gray-800'
                   }`}
                 >
                   {field.name}: {field.type}
@@ -157,6 +229,32 @@ const CollectionDetail: React.FC = () => {
               ))}
             </div>
           </div>
+          
+          {/* Shared Users Section - Only visible to owner or admin */}
+          {(isOwner || collection.accessLevel === 'admin') && collection.sharedWith && collection.sharedWith.length > 0 && (
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              <h2 className="text-lg font-medium text-dark-800 mb-3">Shared With</h2>
+              <div className="space-y-2">
+                {collection.sharedWith.map((user, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                    <div className="flex items-center">
+                      <span className="p-1 bg-primary-100 text-primary-600 rounded-full mr-2">
+                        <FiUser size={16} />
+                      </span>
+                      <div>
+                        <p className="text-dark-800 font-medium">{user.email}</p>
+                        <p className="text-xs text-dark-500">
+                          {user.accessLevel === 'read' && 'Read Only'}
+                          {user.accessLevel === 'write' && 'Can Edit Entries'}
+                          {user.accessLevel === 'admin' && 'Full Access'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mb-6">
@@ -164,16 +262,18 @@ const CollectionDetail: React.FC = () => {
             <h2 className="text-xl font-bold text-dark-800">
               Entries {entries.length > 0 && `(${entries.length})`}
             </h2>
-            <button
-              onClick={() => {
-                setEditingEntryIndex(null);
-                setShowEntryForm(true);
-              }}
-              className="btn-primary flex items-center"
-            >
-              <FiPlus className="mr-2" />
-              Add Entry
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => {
+                  setEditingEntryIndex(null);
+                  setShowEntryForm(true);
+                }}
+                className="btn-primary flex items-center"
+              >
+                <FiPlus className="mr-2" />
+                Add Entry
+              </button>
+            )}
           </div>
 
           {showEntryForm && (
@@ -202,17 +302,19 @@ const CollectionDetail: React.FC = () => {
 
           {entries.length === 0 ? (
             <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-              <p className="text-dark-500 mb-4">No entries yet. Add your first entry to get started.</p>
-              <button
-                onClick={() => {
-                  setEditingEntryIndex(null);
-                  setShowEntryForm(true);
-                }}
-                className="btn-primary inline-flex items-center"
-              >
-                <FiPlus className="mr-2" />
-                Add First Entry
-              </button>
+              <p className="text-dark-500 mb-4">No entries yet. {canEdit ? 'Add your first entry to get started.' : 'The owner has not added any entries yet.'}</p>
+              {canEdit && (
+                <button
+                  onClick={() => {
+                    setEditingEntryIndex(null);
+                    setShowEntryForm(true);
+                  }}
+                  className="btn-primary inline-flex items-center"
+                >
+                  <FiPlus className="mr-2" />
+                  Add First Entry
+                </button>
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -225,7 +327,9 @@ const CollectionDetail: React.FC = () => {
                           {field.name}
                         </th>
                       ))}
-                      <th className="table-header-cell text-right">Actions</th>
+                      {canEdit && (
+                        <th className="table-header-cell text-right">Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="table-body">
@@ -235,45 +339,54 @@ const CollectionDetail: React.FC = () => {
                           <td key={fieldIndex} className="table-cell">
                             {field.type === 'date'
                               ? new Date(entry[field.name] as string).toLocaleDateString()
+                              : field.type === 'rating'
+                              ? <StarRating 
+                                  value={Number(entry[field.name]) || 0} 
+                                  disabled={true} 
+                                  size={18}
+                                  hideText={true}
+                                />
                               : String(entry[field.name])}
                           </td>
                         ))}
-                        <td className="table-cell text-right">
-                          {confirmDeleteEntry === entryIndex ? (
-                            <div className="flex justify-end space-x-2">
-                              <button
-                                onClick={() => handleDeleteEntry(entryIndex)}
-                                className="text-red-600 hover:text-red-800"
-                              >
-                                Confirm
-                              </button>
-                              <button
-                                onClick={() => setConfirmDeleteEntry(null)}
-                                className="text-dark-500 hover:text-dark-700"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex justify-end space-x-2">
-                              <button
-                                onClick={() => {
-                                  setEditingEntryIndex(entryIndex);
-                                  setShowEntryForm(true);
-                                }}
-                                className="p-1 text-primary-600 hover:text-primary-800"
-                              >
-                                <FiEdit />
-                              </button>
-                              <button
-                                onClick={() => setConfirmDeleteEntry(entryIndex)}
-                                className="p-1 text-red-600 hover:text-red-800"
-                              >
-                                <FiTrash2 />
-                              </button>
-                            </div>
-                          )}
-                        </td>
+                        {canEdit && (
+                          <td className="table-cell text-right">
+                            {confirmDeleteEntry === entryIndex ? (
+                              <div className="flex justify-end space-x-2">
+                                <button
+                                  onClick={() => handleDeleteEntry(entryIndex)}
+                                  className="text-red-600 hover:text-red-800"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteEntry(null)}
+                                  className="text-dark-500 hover:text-dark-700"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-end space-x-2">
+                                <button
+                                  onClick={() => {
+                                    setEditingEntryIndex(entryIndex);
+                                    setShowEntryForm(true);
+                                  }}
+                                  className="p-1 text-primary-600 hover:text-primary-800"
+                                >
+                                  <FiEdit />
+                                </button>
+                                <button
+                                  onClick={() => setConfirmDeleteEntry(entryIndex)}
+                                  className="p-1 text-red-600 hover:text-red-800"
+                                >
+                                  <FiTrash2 />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -283,6 +396,19 @@ const CollectionDetail: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Share Modal */}
+      <Modal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        title="Share Collection"
+        maxWidth="max-w-xl"
+      >
+        <ShareCollectionForm
+          collectionId={id || ''}
+          onClose={() => setShowShareModal(false)}
+        />
+      </Modal>
     </div>
   );
 };

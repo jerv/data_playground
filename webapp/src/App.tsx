@@ -57,6 +57,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // Public route component with footer
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { authState } = useAuth();
+  
+  // If user is authenticated, redirect to playground
+  if (authState.isAuthenticated && !authState.isLoading) {
+    return <Navigate to="/playground" />;
+  }
+  
   return (
     <div className="flex flex-col min-h-screen">
       <div className="flex-grow flex flex-col">
