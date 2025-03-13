@@ -28,14 +28,13 @@ const Modal: React.FC<ModalProps> = ({
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      // Prevent scrolling when modal is open
-      document.body.style.overflow = 'hidden';
+      // We no longer need to modify body overflow since we've made scrollbar always visible
+      // This prevents layout shifts
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      // Restore scrolling when modal is closed
-      document.body.style.overflow = 'auto';
+      // We no longer need to restore body overflow
     };
   }, [isOpen, onClose]);
 
