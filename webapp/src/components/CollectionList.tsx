@@ -8,12 +8,19 @@ import Modal from './Modal';
 import CollectionForm from './CollectionForm';
 import ShareCollectionForm from './ShareCollectionForm';
 
+// Key for storing view mode preference in localStorage
+const VIEW_MODE_STORAGE_KEY = 'dataPlayground_viewMode';
+
 const CollectionList: React.FC = () => {
   const { fetchCollections, setSearchTerm, deleteCollection, collectionState } = useCollection();
   const [showForm, setShowForm] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  // Initialize viewMode from localStorage or default to 'card'
+  const [viewMode, setViewMode] = useState<'card' | 'list'>(() => {
+    const savedViewMode = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return (savedViewMode === 'list' || savedViewMode === 'card') ? savedViewMode : 'card';
+  });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchInputValue, setSearchInputValue] = useState(collectionState.searchTerm);
   const [sharingCollectionId, setSharingCollectionId] = useState<string | null>(null);
@@ -28,6 +35,11 @@ const CollectionList: React.FC = () => {
   useEffect(() => {
     fetchCollections(1, true); // Reset and fetch first page on initial load
   }, [fetchCollections]);
+
+  // Save viewMode to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+  }, [viewMode]);
 
   // Handle search input changes with debounce
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -44,6 +56,12 @@ const CollectionList: React.FC = () => {
       setSearchTerm(value);
       fetchCollections(1, true, value);
     }, 300); // 300ms debounce
+  };
+
+  // Handle view mode toggle with localStorage persistence
+  const handleViewModeChange = (mode: 'card' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
   };
 
   // Clear search
@@ -436,7 +454,7 @@ const CollectionList: React.FC = () => {
           <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
             <div className="bg-white rounded-md shadow-sm p-1 flex">
               <button
-                onClick={() => setViewMode('card')}
+                onClick={() => handleViewModeChange('card')}
                 className={`p-2 rounded-md mr-1 ${
                   viewMode === 'card'
                     ? 'bg-primary-100 text-primary-600'
@@ -447,7 +465,7 @@ const CollectionList: React.FC = () => {
                 <FiGrid />
               </button>
               <button
-                onClick={() => setViewMode('list')}
+                onClick={() => handleViewModeChange('list')}
                 className={`p-2 rounded-md ${
                   viewMode === 'list'
                     ? 'bg-primary-100 text-primary-600'
