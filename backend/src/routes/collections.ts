@@ -1,7 +1,8 @@
 import express, { Request, Response } from 'express';
 import { z } from 'zod';
 import sanitize from 'mongo-sanitize';
-import { Collection, IField, FieldType } from '../models/collection';
+import { Collection, IField, FieldType, AccessLevel } from '../models/collection';
+import { User } from '../models/user';
 import { authenticate } from '../middleware/auth';
 
 const router = express.Router();
@@ -39,6 +40,13 @@ const collectionSchema = z.object({
   ),
 });
 
+const shareSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  accessLevel: z.enum(['read', 'write', 'admin'] as const, {
+    errorMap: () => ({ message: 'Invalid access level. Must be one of: read, write, admin' })
+  }),
+});
+
 const entrySchema = z.record(z.string(), z.union([
   z.string(),
   z.number(),
@@ -49,6 +57,49 @@ const entrySchema = z.record(z.string(), z.union([
 
 // Apply authentication middleware to all collection routes
 router.use(authenticate);
+
+// Helper function to check if user has access to a collection
+const checkCollectionAccess = async (
+  collectionId: string, 
+  userId: string, 
+  requiredAccessLevel: AccessLevel = 'read'
+) => {
+  const collection = await Collection.findById(collectionId);
+  
+  if (!collection) {
+    return { hasAccess: false, collection: null, message: 'Collection not found' };
+  }
+  
+  // Owner has full access
+  if (collection.user.toString() === userId) {
+    return { hasAccess: true, collection, message: 'Owner access' };
+  }
+  
+  // Check if user has shared access
+  const sharedAccess = collection.sharedWith.find(shared => 
+    shared.userId?.toString() === userId || 
+    shared.email.toLowerCase() === userId.toLowerCase()
+  );
+  
+  if (!sharedAccess) {
+    return { hasAccess: false, collection, message: 'No access' };
+  }
+  
+  // Check access level
+  const accessLevels: { [key in AccessLevel]: number } = {
+    'read': 1,
+    'write': 2,
+    'admin': 3
+  };
+  
+  const hasRequiredAccess = accessLevels[sharedAccess.accessLevel] >= accessLevels[requiredAccessLevel];
+  
+  return { 
+    hasAccess: hasRequiredAccess, 
+    collection, 
+    message: hasRequiredAccess ? `Has ${sharedAccess.accessLevel} access` : 'Insufficient access level'
+  };
+};
 
 // Create a new collection
 router.post('/', async (req: Request, res: Response) => {
@@ -69,6 +120,7 @@ router.post('/', async (req: Request, res: Response) => {
           type: field.type,
         })),
         user: req.user?._id,
+        sharedWith: [] // Initialize with empty shared users
       };
 
       console.log('Creating collection with sanitized data:', JSON.stringify(sanitizedData, null, 2));
@@ -85,6 +137,8 @@ router.post('/', async (req: Request, res: Response) => {
           name: collection.name,
           fields: collection.fields,
           entriesCount: 0,
+          isOwner: true,
+          accessLevel: 'admin',
         },
       });
     } catch (validationError) {
@@ -113,39 +167,84 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get all collections for the current user
+// Get all collections for the current user (including shared collections)
 router.get('/', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
     const searchTerm = req.query.search as string || '';
     const skip = (page - 1) * limit;
+    const userId = req.user?._id;
+    const userEmail = req.user?.email.toLowerCase();
 
-    // Build query with optional search filter
-    const query: any = { user: req.user?._id };
-    
-    // Add search filter if provided
+    // Build query for owned collections
+    const ownedQuery: any = { user: userId };
     if (searchTerm) {
-      query.name = { $regex: searchTerm, $options: 'i' }; // Case-insensitive search
+      ownedQuery.name = { $regex: searchTerm, $options: 'i' }; // Case-insensitive search
     }
 
-    // Get total count for pagination info
-    const totalCount = await Collection.countDocuments(query);
+    // Build query for shared collections
+    const sharedQuery: any = {
+      'sharedWith': {
+        $elemMatch: {
+          $or: [
+            { email: userEmail },
+            { userId: userId }
+          ]
+        }
+      }
+    };
+    if (searchTerm) {
+      sharedQuery.name = { $regex: searchTerm, $options: 'i' };
+    }
+
+    // Get total count for pagination info (both owned and shared)
+    const ownedCount = await Collection.countDocuments(ownedQuery);
+    const sharedCount = await Collection.countDocuments(sharedQuery);
+    const totalCount = ownedCount + sharedCount;
     
-    // Get paginated collections
-    const collections = await Collection.find(query)
+    // Get paginated collections (both owned and shared)
+    const ownedCollections = await Collection.find(ownedQuery)
       .sort({ _id: -1 }) // Sort by newest first
-      .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
+    
+    const sharedCollections = await Collection.find(sharedQuery)
+      .sort({ _id: -1 }) // Sort by newest first
+      .limit(limit)
+      .lean();
+    
+    // Combine and sort collections
+    const allCollections = [
+      ...ownedCollections.map(collection => ({
+        ...collection,
+        isOwner: true,
+        accessLevel: 'admin' as AccessLevel
+      })),
+      ...sharedCollections.map(collection => {
+        const sharedInfo = collection.sharedWith.find(
+          shared => shared.email === userEmail || (shared.userId && shared.userId.toString() === userId?.toString())
+        );
+        return {
+          ...collection,
+          isOwner: false,
+          accessLevel: sharedInfo?.accessLevel || 'read' as AccessLevel
+        };
+      })
+    ]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(skip, skip + limit);
 
     return res.status(200).json({
       success: true,
-      collections: collections.map(collection => ({
+      collections: allCollections.map(collection => ({
         id: collection._id,
         name: collection.name,
         fields: collection.fields,
         entriesCount: collection.entries.length,
         createdAt: collection.createdAt,
+        isOwner: collection.isOwner,
+        accessLevel: collection.accessLevel,
       })),
       pagination: {
         total: totalCount,
@@ -156,6 +255,7 @@ router.get('/', async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    console.error('Error fetching collections:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error fetching collections',
@@ -166,16 +266,26 @@ router.get('/', async (req: Request, res: Response) => {
 // Get a single collection by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const collection = await Collection.findOne({
-      _id: req.params.id,
-      user: req.user?._id,
-    });
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId);
 
-    if (!collection) {
+    if (!hasAccess || !collection) {
       return res.status(404).json({
         success: false,
         message: 'Collection not found',
       });
+    }
+
+    // Determine if user is owner and access level
+    const isOwner = collection.user.toString() === userId;
+    let accessLevel: AccessLevel = 'admin'; // Default for owner
+    
+    if (!isOwner) {
+      const sharedInfo = collection.sharedWith.find(
+        shared => shared.email.toLowerCase() === req.user?.email.toLowerCase() || 
+                 (shared.userId && shared.userId.toString() === userId)
+      );
+      accessLevel = sharedInfo?.accessLevel || 'read';
     }
 
     return res.status(200).json({
@@ -186,9 +296,13 @@ router.get('/:id', async (req: Request, res: Response) => {
         fields: collection.fields,
         entries: collection.entries,
         createdAt: collection.createdAt,
+        isOwner,
+        accessLevel,
+        sharedWith: isOwner ? collection.sharedWith : undefined, // Only send sharing info to owner
       },
     });
   } catch (error) {
+    console.error('Error fetching collection:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error fetching collection',
@@ -199,6 +313,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Update a collection
 router.put('/:id', async (req: Request, res: Response) => {
   try {
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'admin');
+
+    if (!hasAccess || !collection) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to update this collection',
+      });
+    }
+
     // Validate request body
     const validatedData = collectionSchema.parse(req.body);
     
@@ -210,19 +334,6 @@ router.put('/:id', async (req: Request, res: Response) => {
         type: field.type,
       })),
     };
-
-    // Find collection
-    const collection = await Collection.findOne({
-      _id: req.params.id,
-      user: req.user?._id,
-    });
-
-    if (!collection) {
-      return res.status(404).json({
-        success: false,
-        message: 'Collection not found',
-      });
-    }
 
     // Update collection
     collection.name = sanitizedData.name;
@@ -237,6 +348,8 @@ router.put('/:id', async (req: Request, res: Response) => {
         name: collection.name,
         fields: collection.fields,
         entriesCount: collection.entries.length,
+        isOwner: collection.user.toString() === userId,
+        accessLevel: 'admin',
       },
     });
   } catch (error) {
@@ -261,10 +374,25 @@ router.put('/:id', async (req: Request, res: Response) => {
 // Delete a collection
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const result = await Collection.deleteOne({
-      _id: req.params.id,
-      user: req.user?._id,
-    });
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'admin');
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete this collection',
+      });
+    }
+
+    // Only the owner can delete a collection
+    if (collection?.user.toString() !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the owner can delete a collection',
+      });
+    }
+
+    const result = await Collection.deleteOne({ _id: req.params.id });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({
@@ -278,6 +406,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
       message: 'Collection deleted successfully',
     });
   } catch (error) {
+    console.error('Error deleting collection:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error deleting collection',
@@ -285,19 +414,140 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// Share a collection with a user
+router.post('/:id/share', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'admin');
+
+    if (!hasAccess || !collection) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to share this collection',
+      });
+    }
+
+    // Validate request body
+    const validatedData = shareSchema.parse(req.body);
+    
+    // Sanitize inputs
+    const email = sanitize(validatedData.email.toLowerCase());
+    const accessLevel = validatedData.accessLevel;
+
+    // Check if already shared with this email
+    const alreadyShared = collection.sharedWith.find(shared => shared.email === email);
+    
+    if (alreadyShared) {
+      // Update existing share
+      alreadyShared.accessLevel = accessLevel;
+    } else {
+      // Add new share
+      // Try to find user by email to link userId
+      const user = await User.findOne({ email });
+      
+      collection.sharedWith.push({
+        email,
+        accessLevel,
+        userId: user?._id
+      });
+    }
+    
+    await collection.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Collection shared with ${email} successfully`,
+      sharedWith: collection.sharedWith,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation error',
+        errors: error.errors.map(e => ({
+          field: e.path.join('.'),
+          message: e.message,
+        })),
+      });
+    }
+
+    console.error('Error sharing collection:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error sharing collection',
+    });
+  }
+});
+
+// Remove share access for a user
+router.delete('/:id/share/:email', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'admin');
+
+    if (!hasAccess || !collection) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to modify sharing for this collection',
+      });
+    }
+
+    const email = req.params.email.toLowerCase();
+    
+    // Remove share access
+    collection.sharedWith = collection.sharedWith.filter(shared => shared.email !== email);
+    await collection.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Share access removed for ${email}`,
+      sharedWith: collection.sharedWith,
+    });
+  } catch (error) {
+    console.error('Error removing share access:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error removing share access',
+    });
+  }
+});
+
+// Get all users with whom the collection is shared
+router.get('/:id/share', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'admin');
+
+    if (!hasAccess || !collection) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to view sharing for this collection',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      sharedWith: collection.sharedWith,
+    });
+  } catch (error) {
+    console.error('Error fetching shared users:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error fetching shared users',
+    });
+  }
+});
+
 // Add an entry to a collection
 router.post('/:id/entries', async (req: Request, res: Response) => {
   try {
-    // Find collection
-    const collection = await Collection.findOne({
-      _id: req.params.id,
-      user: req.user?._id,
-    });
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'write');
 
-    if (!collection) {
-      return res.status(404).json({
+    if (!hasAccess || !collection) {
+      return res.status(403).json({
         success: false,
-        message: 'Collection not found',
+        message: 'You do not have permission to add entries to this collection',
       });
     }
 
@@ -371,6 +621,7 @@ router.post('/:id/entries', async (req: Request, res: Response) => {
       });
     }
 
+    console.error('Error adding entry:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error adding entry',
@@ -381,16 +632,13 @@ router.post('/:id/entries', async (req: Request, res: Response) => {
 // Update an entry in a collection
 router.put('/:id/entries/:entryIndex', async (req: Request, res: Response) => {
   try {
-    // Find collection
-    const collection = await Collection.findOne({
-      _id: req.params.id,
-      user: req.user?._id,
-    });
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'write');
 
-    if (!collection) {
-      return res.status(404).json({
+    if (!hasAccess || !collection) {
+      return res.status(403).json({
         success: false,
-        message: 'Collection not found',
+        message: 'You do not have permission to update entries in this collection',
       });
     }
 
@@ -473,6 +721,7 @@ router.put('/:id/entries/:entryIndex', async (req: Request, res: Response) => {
       });
     }
 
+    console.error('Error updating entry:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error updating entry',
@@ -483,16 +732,13 @@ router.put('/:id/entries/:entryIndex', async (req: Request, res: Response) => {
 // Delete an entry from a collection
 router.delete('/:id/entries/:entryIndex', async (req: Request, res: Response) => {
   try {
-    // Find collection
-    const collection = await Collection.findOne({
-      _id: req.params.id,
-      user: req.user?._id,
-    });
+    const userId = req.user?._id.toString();
+    const { hasAccess, collection, message } = await checkCollectionAccess(req.params.id, userId, 'write');
 
-    if (!collection) {
-      return res.status(404).json({
+    if (!hasAccess || !collection) {
+      return res.status(403).json({
         success: false,
-        message: 'Collection not found',
+        message: 'You do not have permission to delete entries from this collection',
       });
     }
 
@@ -514,6 +760,7 @@ router.delete('/:id/entries/:entryIndex', async (req: Request, res: Response) =>
       message: 'Entry deleted successfully',
     });
   } catch (error) {
+    console.error('Error deleting entry:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error deleting entry',

@@ -48,6 +48,25 @@ const fieldSchema = new mongoose_1.Schema({
         required: [true, 'Field type is required'],
     },
 }, { _id: false });
+// Shared user schema
+const sharedUserSchema = new mongoose_1.Schema({
+    email: {
+        type: String,
+        required: [true, 'Email is required'],
+        trim: true,
+        lowercase: true,
+    },
+    accessLevel: {
+        type: String,
+        enum: ['read', 'write', 'admin'],
+        default: 'read',
+    },
+    userId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false,
+    },
+}, { _id: false });
 // Collection schema
 const collectionSchema = new mongoose_1.Schema({
     name: {
@@ -70,8 +89,9 @@ const collectionSchema = new mongoose_1.Schema({
             message: 'Collection must have at least one field',
         },
     },
-    entries: {
-        type: Array,
+    entries: [{}],
+    sharedWith: {
+        type: [sharedUserSchema],
         default: [],
     },
 }, {
