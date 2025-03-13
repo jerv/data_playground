@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
 // Field types
-export type FieldType = 'text' | 'number' | 'date';
+export type FieldType = 'text' | 'number' | 'date' | 'rating' | 'time';
 
 // Field interface
 export interface IField {
@@ -23,7 +23,10 @@ export interface ICollection {
 }
 
 // Collection document interface for Mongoose
-export interface ICollectionDocument extends ICollection, Document {}
+export interface ICollectionDocument extends ICollection, Document {
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 // Field schema
 const fieldSchema = new Schema<IField>(
@@ -35,7 +38,7 @@ const fieldSchema = new Schema<IField>(
     },
     type: {
       type: String,
-      enum: ['text', 'number', 'date'],
+      enum: ['text', 'number', 'date', 'rating', 'time'],
       required: [true, 'Field type is required'],
     },
   },

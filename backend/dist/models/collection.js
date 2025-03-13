@@ -44,7 +44,7 @@ const fieldSchema = new mongoose_1.Schema({
     },
     type: {
         type: String,
-        enum: ['text', 'number', 'date'],
+        enum: ['text', 'number', 'date', 'rating', 'time'],
         required: [true, 'Field type is required'],
     },
 }, { _id: false });
@@ -71,7 +71,7 @@ const collectionSchema = new mongoose_1.Schema({
         },
     },
     entries: {
-        type: [mongoose_1.Schema.Types.Mixed],
+        type: Array,
         default: [],
     },
 }, {

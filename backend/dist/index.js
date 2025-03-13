@@ -17,7 +17,7 @@ const app = (0, express_1.default)();
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // Connect to MongoDB
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/data-playground';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/data_playground';
 mongoose_1.default
     .connect(MONGODB_URI)
     .then(() => {

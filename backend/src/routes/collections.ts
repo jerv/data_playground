@@ -8,19 +8,43 @@ const router = express.Router();
 
 // Validation schemas using Zod
 const fieldSchema = z.object({
-  name: z.string().min(1, 'Field name is required'),
-  type: z.enum(['text', 'number', 'date'] as const),
+  name: z.string().min(1, 'Field name is required').refine(
+    name => name.trim().length > 0,
+    { message: 'Field name cannot be empty' }
+  ),
+  type: z.enum(['text', 'number', 'date', 'rating', 'time'] as const, {
+    errorMap: () => ({ message: 'Invalid field type. Must be one of: text, number, date, rating, time' })
+  }),
 });
+
+// Log the valid field types to help with debugging
+console.log('Valid field types:', ['text', 'number', 'date', 'rating', 'time']);
 
 const collectionSchema = z.object({
   name: z.string().min(1, 'Collection name is required'),
-  fields: z.array(fieldSchema).min(1, 'At least one field is required'),
+  fields: z.array(fieldSchema).min(1, 'At least one field is required').refine(
+    fields => {
+      // Check for duplicate field names
+      const fieldNames = new Set();
+      return fields.every(field => {
+        const name = field.name.toLowerCase().trim();
+        if (fieldNames.has(name)) {
+          return false;
+        }
+        fieldNames.add(name);
+        return true;
+      });
+    },
+    { message: 'Field names must be unique (case-insensitive)' }
+  ),
 });
 
 const entrySchema = z.record(z.string(), z.union([
   z.string(),
   z.number(),
   z.date(),
+  z.number().min(0).max(5),
+  z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
 ]));
 
 // Apply authentication middleware to all collection routes
@@ -29,44 +53,59 @@ router.use(authenticate);
 // Create a new collection
 router.post('/', async (req: Request, res: Response) => {
   try {
-    // Validate request body
-    const validatedData = collectionSchema.parse(req.body);
+    console.log('Received collection creation request:', JSON.stringify(req.body, null, 2));
+    console.log('Field types in request:', req.body.fields?.map((f: any) => ({ name: f.name, type: f.type })));
     
-    // Sanitize inputs
-    const sanitizedData = {
-      name: sanitize(validatedData.name),
-      fields: validatedData.fields.map(field => ({
-        name: sanitize(field.name),
-        type: field.type,
-      })),
-      user: req.user?._id,
-    };
-
-    // Create new collection
-    const collection = await Collection.create(sanitizedData);
-
-    return res.status(201).json({
-      success: true,
-      message: 'Collection created successfully',
-      collection: {
-        id: collection._id,
-        name: collection.name,
-        fields: collection.fields,
-        entriesCount: 0,
-      },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors: error.errors.map(e => ({
-          field: e.path.join('.'),
-          message: e.message,
+    // Validate request body
+    try {
+      const validatedData = collectionSchema.parse(req.body);
+      console.log('Validation successful, validated data:', JSON.stringify(validatedData, null, 2));
+      
+      // Sanitize inputs
+      const sanitizedData = {
+        name: sanitize(validatedData.name),
+        fields: validatedData.fields.map(field => ({
+          name: sanitize(field.name.trim()),
+          type: field.type,
         })),
-      });
-    }
+        user: req.user?._id,
+      };
 
+      console.log('Creating collection with sanitized data:', JSON.stringify(sanitizedData, null, 2));
+
+      // Create new collection
+      const collection = await Collection.create(sanitizedData);
+      console.log('Collection created successfully:', collection);
+
+      return res.status(201).json({
+        success: true,
+        message: 'Collection created successfully',
+        collection: {
+          id: collection._id,
+          name: collection.name,
+          fields: collection.fields,
+          entriesCount: 0,
+        },
+      });
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        console.error('Validation error details:', JSON.stringify(validationError.errors, null, 2));
+        console.error('Validation error format issues:', validationError.format());
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: validationError.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+            code: e.code,
+          })),
+        });
+      }
+      throw validationError;
+    }
+  } catch (error) {
+    console.error('Error creating collection:', error);
+    
     return res.status(500).json({
       success: false,
       message: 'Server error creating collection',
@@ -79,13 +118,22 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 10;
+    const searchTerm = req.query.search as string || '';
     const skip = (page - 1) * limit;
 
+    // Build query with optional search filter
+    const query: any = { user: req.user?._id };
+    
+    // Add search filter if provided
+    if (searchTerm) {
+      query.name = { $regex: searchTerm, $options: 'i' }; // Case-insensitive search
+    }
+
     // Get total count for pagination info
-    const totalCount = await Collection.countDocuments({ user: req.user?._id });
+    const totalCount = await Collection.countDocuments(query);
     
     // Get paginated collections
-    const collections = await Collection.find({ user: req.user?._id })
+    const collections = await Collection.find(query)
       .sort({ _id: -1 }) // Sort by newest first
       .skip(skip)
       .limit(limit);
@@ -97,6 +145,7 @@ router.get('/', async (req: Request, res: Response) => {
         name: collection.name,
         fields: collection.fields,
         entriesCount: collection.entries.length,
+        createdAt: collection.createdAt,
       })),
       pagination: {
         total: totalCount,
@@ -136,6 +185,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         name: collection.name,
         fields: collection.fields,
         entries: collection.entries,
+        createdAt: collection.createdAt,
       },
     });
   } catch (error) {
@@ -269,6 +319,14 @@ router.post('/:id/entries', async (req: Request, res: Response) => {
             message: 'Invalid date format',
           });
           break;
+        case 'rating':
+          fieldValidators[fieldName] = z.number().min(0).max(5);
+          break;
+        case 'time':
+          fieldValidators[fieldName] = z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, {
+            message: 'Time must be in format HH:MM',
+          });
+          break;
       }
     });
 
@@ -283,9 +341,9 @@ router.post('/:id/entries', async (req: Request, res: Response) => {
       const fieldName = field.name;
       const value = validatedEntry[fieldName];
       
-      if (field.type === 'text') {
+      if (field.type === 'text' || field.type === 'time') {
         sanitizedEntry[fieldName] = sanitize(value);
-      } else if (field.type === 'number') {
+      } else if (field.type === 'number' || field.type === 'rating') {
         sanitizedEntry[fieldName] = Number(value);
       } else if (field.type === 'date') {
         sanitizedEntry[fieldName] = new Date(value);
@@ -363,6 +421,14 @@ router.put('/:id/entries/:entryIndex', async (req: Request, res: Response) => {
             message: 'Invalid date format',
           });
           break;
+        case 'rating':
+          fieldValidators[fieldName] = z.number().min(0).max(5);
+          break;
+        case 'time':
+          fieldValidators[fieldName] = z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, {
+            message: 'Time must be in format HH:MM',
+          });
+          break;
       }
     });
 
@@ -377,9 +443,9 @@ router.put('/:id/entries/:entryIndex', async (req: Request, res: Response) => {
       const fieldName = field.name;
       const value = validatedEntry[fieldName];
       
-      if (field.type === 'text') {
+      if (field.type === 'text' || field.type === 'time') {
         sanitizedEntry[fieldName] = sanitize(value);
-      } else if (field.type === 'number') {
+      } else if (field.type === 'number' || field.type === 'rating') {
         sanitizedEntry[fieldName] = Number(value);
       } else if (field.type === 'date') {
         sanitizedEntry[fieldName] = new Date(value);
