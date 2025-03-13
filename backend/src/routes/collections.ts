@@ -4,6 +4,7 @@ import sanitize from 'mongo-sanitize';
 import { Collection, IField, FieldType, AccessLevel } from '../models/collection';
 import { User } from '../models/user';
 import { authenticate } from '../middleware/auth';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
@@ -57,6 +58,112 @@ const entrySchema = z.record(z.string(), z.union([
 
 // Apply authentication middleware to all collection routes
 router.use(authenticate);
+
+// Test route to check if the backend is working
+router.get('/test', async (req: Request, res: Response) => {
+  try {
+    console.log('Test route hit');
+    return res.status(200).json({
+      success: true,
+      message: 'Backend is working correctly',
+      user: req.user?._id
+    });
+  } catch (error) {
+    console.error('Error in test route:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error in test route',
+    });
+  }
+});
+
+// Delete all collections for the current user
+router.delete('/all', async (req: Request, res: Response) => {
+  try {
+    console.log('DELETE /all route hit');
+    const userId = req.user?._id;
+    
+    if (!userId) {
+      console.error('No user ID found in request. User object:', req.user);
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication failed. Unable to delete collections.',
+      });
+    }
+    
+    console.log(`Attempting to delete all collections for user ${userId}`);
+    
+    // Only delete collections owned by the current user
+    const result = await Collection.deleteMany({ user: userId });
+    
+    console.log(`Delete result:`, result);
+    
+    if (result.deletedCount === 0) {
+      console.log('No collections found to delete');
+      return res.status(200).json({
+        success: true,
+        message: 'No collections to delete',
+      });
+    }
+    
+    console.log(`Successfully deleted ${result.deletedCount} collections`);
+    return res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} collections`,
+    });
+  } catch (error) {
+    console.error('Error deleting all collections:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error deleting all collections',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Delete all collections for the current user (alternative route)
+router.delete('/delete-all', async (req: Request, res: Response) => {
+  try {
+    console.log('DELETE /delete-all route hit');
+    const userId = req.user?._id;
+    
+    if (!userId) {
+      console.error('No user ID found in request. User object:', req.user);
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication failed. Unable to delete collections.',
+      });
+    }
+    
+    console.log('User ID:', userId);
+    
+    // Only delete collections owned by the current user
+    const result = await Collection.deleteMany({ user: userId });
+    
+    console.log('Delete result:', result);
+    
+    if (result.deletedCount === 0) {
+      console.log('No collections found to delete');
+      return res.status(200).json({
+        success: true,
+        message: 'No collections to delete',
+      });
+    }
+    
+    console.log(`Successfully deleted ${result.deletedCount} collections`);
+    return res.status(200).json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} collections`,
+    });
+  } catch (error) {
+    console.error('Error deleting all collections:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error deleting all collections',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
 
 // Helper function to check if user has access to a collection
 const checkCollectionAccess = async (
@@ -203,18 +310,16 @@ router.get('/', async (req: Request, res: Response) => {
     const sharedCount = await Collection.countDocuments(sharedQuery);
     const totalCount = ownedCount + sharedCount;
     
-    // Get paginated collections (both owned and shared)
+    // Get all collections (both owned and shared) without pagination to sort them properly
     const ownedCollections = await Collection.find(ownedQuery)
-      .sort({ _id: -1 }) // Sort by newest first
-      .limit(limit)
+      .sort({ createdAt: -1 }) // Sort by newest first
       .lean();
     
     const sharedCollections = await Collection.find(sharedQuery)
-      .sort({ _id: -1 }) // Sort by newest first
-      .limit(limit)
+      .sort({ createdAt: -1 }) // Sort by newest first
       .lean();
     
-    // Combine and sort collections
+    // Combine and sort all collections
     const allCollections = [
       ...ownedCollections.map(collection => ({
         ...collection,
@@ -232,12 +337,14 @@ router.get('/', async (req: Request, res: Response) => {
         };
       })
     ]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(skip, skip + limit);
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    // Apply pagination after sorting
+    const paginatedCollections = allCollections.slice(skip, skip + limit);
 
     return res.status(200).json({
       success: true,
-      collections: allCollections.map(collection => ({
+      collections: paginatedCollections.map(collection => ({
         id: collection._id,
         name: collection.name,
         fields: collection.fields,
@@ -260,6 +367,40 @@ router.get('/', async (req: Request, res: Response) => {
       success: false,
       message: 'Server error fetching collections',
     });
+  }
+});
+
+// Get user statistics
+router.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    
+    // Get total collections count
+    const totalCollections = await Collection.countDocuments({ user: userId });
+    
+    // Get total entries count across all collections
+    const collections = await Collection.find({ user: userId });
+    const totalEntries = collections.reduce((sum, collection) => {
+      return sum + (collection.entries?.length || 0);
+    }, 0);
+    
+    // Get user creation date and last active date from the User model
+    const user = await User.findById(userId);
+    
+    // Since we're using timestamps in the schema, these fields exist on the document
+    // but TypeScript doesn't know about them, so we use type assertion
+    const userCreatedAt = user ? (user as any).createdAt : null;
+    const userLastActive = user ? (user as any).updatedAt : null;
+    
+    res.json({
+      totalCollections,
+      totalEntries,
+      createdAt: userCreatedAt,
+      lastActive: userLastActive
+    });
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    res.status(500).json({ message: 'Failed to fetch user statistics' });
   }
 });
 
@@ -445,11 +586,18 @@ router.post('/:id/share', async (req: Request, res: Response) => {
       // Try to find user by email to link userId
       const user = await User.findOne({ email });
       
-      collection.sharedWith.push({
+      // Create the shared user object with required fields
+      const sharedUser: any = {
         email,
-        accessLevel,
-        userId: user?._id
-      });
+        accessLevel
+      };
+      
+      // Only add userId if user exists
+      if (user) {
+        sharedUser.userId = user._id;
+      }
+      
+      collection.sharedWith.push(sharedUser);
     }
     
     await collection.save();

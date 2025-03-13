@@ -104,67 +104,86 @@ router.post('/register', async (req: Request, res: Response) => {
 // Login user
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    // Validate request body
-    const validatedData = loginSchema.parse(req.body);
+    console.log('Login request received:', req.body);
     
-    // Sanitize inputs
-    const sanitizedEmail = sanitize(validatedData.email);
+    // Validate request body
+    try {
+      const validatedData = loginSchema.parse(req.body);
+      console.log('Login data validated successfully');
+      
+      // Sanitize inputs
+      const sanitizedEmail = sanitize(validatedData.email);
+      console.log('Attempting to find user with email:', sanitizedEmail);
 
-    // Find user by email
-    const user = await User.findOne({ email: sanitizedEmail });
+      // Find user by email
+      const user = await User.findOne({ email: sanitizedEmail });
 
-    if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-      });
-    }
-
-    // Check password
-    const isPasswordValid = await user.comparePassword(validatedData.password);
-
-    if (!isPasswordValid) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid credentials',
-      });
-    }
-
-    // Generate JWT token
-    const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
-    const token = jwt.sign(
-      { id: user._id },
-      jwtSecret,
-      {
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+      if (!user) {
+        console.log('User not found with email:', sanitizedEmail);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials',
+        });
       }
-    );
 
-    return res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email,
-      },
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({
-        success: false,
-        message: 'Validation error',
-        errors: error.errors.map(e => ({
-          field: e.path.join('.'),
-          message: e.message,
-        })),
+      console.log('User found:', user.username);
+      
+      // Check password
+      const isPasswordValid = await user.comparePassword(validatedData.password);
+      console.log('Password validation result:', isPasswordValid);
+
+      if (!isPasswordValid) {
+        console.log('Invalid password for user:', user.username);
+        return res.status(401).json({
+          success: false,
+          message: 'Invalid credentials',
+        });
+      }
+
+      // Generate JWT token
+      const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
+      console.log('Using JWT secret:', jwtSecret.substring(0, 3) + '...');
+      
+      const token = jwt.sign(
+        { id: user._id },
+        jwtSecret,
+        {
+          expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+        }
+      );
+      
+      console.log('JWT token generated successfully');
+
+      return res.status(200).json({
+        success: true,
+        message: 'Login successful',
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+        },
       });
+    } catch (validationError) {
+      if (validationError instanceof z.ZodError) {
+        console.error('Validation error:', validationError.errors);
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: validationError.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message,
+          })),
+        });
+      }
+      throw validationError;
     }
-
+  } catch (error) {
+    console.error('Server error during login:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error during login',
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });

@@ -31,6 +31,8 @@ export const CollectionContext = createContext<{
   createCollection: (data: CollectionFormData) => Promise<boolean>;
   updateCollection: (id: string, data: CollectionFormData) => Promise<boolean>;
   deleteCollection: (id: string) => Promise<void>;
+  deleteAllCollections: () => Promise<boolean>;
+  getUserStats: () => Promise<any>;
   shareCollection: (id: string, data: ShareFormData) => Promise<SharedUser[] | null>;
   getSharedUsers: (id: string) => Promise<SharedUser[] | null>;
   removeSharedUser: (id: string, email: string) => Promise<SharedUser[] | null>;
@@ -45,6 +47,8 @@ export const CollectionContext = createContext<{
   createCollection: async () => false,
   updateCollection: async () => false,
   deleteCollection: async () => {},
+  deleteAllCollections: async () => false,
+  getUserStats: async () => ({}),
   shareCollection: async () => null,
   getSharedUsers: async () => null,
   removeSharedUser: async () => null,
@@ -56,6 +60,28 @@ export const CollectionContext = createContext<{
 // Collection provider component
 export const CollectionProvider = ({ children }: { children: React.ReactNode }) => {
   const [collectionState, setCollectionState] = useState<CollectionState>(initialState);
+
+  // Add a safety timeout to prevent infinite loading
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
+    if (collectionState.isLoading) {
+      timeoutId = setTimeout(() => {
+        console.log('Collection loading timeout triggered, resetting loading state');
+        setCollectionState(prev => ({ 
+          ...prev, 
+          isLoading: false,
+          error: prev.error || 'Operation timed out. Please try again.'
+        }));
+      }, 10000); // 10 seconds timeout
+    }
+    
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [collectionState.isLoading]);
 
   // Set search term
   const setSearchTerm = useCallback((search: string) => {
@@ -73,7 +99,20 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
       // Use provided search term or the one from state
       const searchTerm = search !== undefined ? search : collectionState.searchTerm;
       
-      const response = await collectionsAPI.getCollections(page, initialPagination.limit, searchTerm);
+      // Use the current pagination limit or the default
+      const limit = collectionState.pagination?.limit || initialPagination.limit;
+      
+      // Add a timeout to the API call
+      const timeoutPromise = new Promise<{ collections: any[], pagination: any }>((_, reject) => 
+        setTimeout(() => reject(new Error('Collections fetch timed out')), 5000)
+      );
+      
+      const collectionsPromise = collectionsAPI.getCollections(page, limit, searchTerm);
+      
+      // Race between the API call and the timeout
+      const response = await Promise.race([collectionsPromise, timeoutPromise]);
+      
+      console.log('Fetch collections response:', response);
       
       // Ensure we have pagination data with defaults if missing
       const pagination = response.pagination || {
@@ -100,17 +139,24 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
         };
       });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Failed to fetch collections';
+      console.error('Error fetching collections:', error);
+      const errorMessage = error.message || error.response?.data?.message || 'Failed to fetch collections';
       setCollectionState(prev => ({
         ...prev,
         isLoading: false,
         error: errorMessage,
         // Keep existing pagination data on error
-        pagination: prev.pagination
+        pagination: prev.pagination,
+        // On error, ensure we have at least an empty array for collections if none exist
+        collections: prev.collections.length ? prev.collections : []
       }));
-      toast.error(errorMessage);
+      
+      // Only show toast for non-timeout errors to avoid spamming the user
+      if (!errorMessage.includes('timed out')) {
+        toast.error(errorMessage);
+      }
     }
-  }, [collectionState.searchTerm]);
+  }, [collectionState.searchTerm, collectionState.pagination?.limit]);
 
   // Fetch a single collection
   const fetchCollection = useCallback(async (id: string) => {
@@ -234,28 +280,81 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
       setCollectionState(prev => ({ ...prev, isLoading: true }));
       await collectionsAPI.deleteCollection(id);
       
-      setCollectionState(prev => {
-        // Remove collection from state
-        const updatedCollections = prev.collections.filter(c => c.id !== id);
-        
-        return {
-          ...prev,
-          collections: updatedCollections,
-          currentCollection: prev.currentCollection?.id === id ? null : prev.currentCollection,
-          isLoading: false,
-          error: null,
-        };
-      });
+      // Remove the deleted collection from state
+      setCollectionState(prev => ({
+        ...prev,
+        collections: prev.collections.filter(collection => collection.id !== id),
+        isLoading: false,
+        error: null
+      }));
       
       toast.success('Collection deleted successfully');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Failed to delete collection';
+    } catch (error) {
+      console.error('Error deleting collection:', error);
       setCollectionState(prev => ({
         ...prev,
         isLoading: false,
-        error: errorMessage,
+        error: 'Failed to delete collection'
       }));
+      toast.error('Failed to delete collection');
+    }
+  }, []);
+  
+  // Delete all collections
+  const deleteAllCollections = useCallback(async () => {
+    try {
+      console.log('Starting deleteAllCollections in useCollection hook');
+      setCollectionState(prev => ({ ...prev, isLoading: true }));
+      
+      const response = await collectionsAPI.deleteAllCollections();
+      console.log('deleteAllCollections response:', response);
+      
+      // Clear all collections from state
+      setCollectionState(prev => ({
+        ...prev,
+        collections: [],
+        isLoading: false,
+        error: null
+      }));
+      
+      toast.success('All collections deleted successfully');
+      return true;
+    } catch (error: any) {
+      console.error('Error in useCollection.deleteAllCollections:', error);
+      
+      // Get a more specific error message if available
+      let errorMessage = 'Failed to delete all collections';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      // Make sure to reset loading state
+      setCollectionState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: errorMessage
+      }));
+      
       toast.error(errorMessage);
+      return false;
+    } finally {
+      // Ensure loading state is reset no matter what
+      setCollectionState(prev => ({
+        ...prev,
+        isLoading: false
+      }));
+    }
+  }, []);
+  
+  // Get user stats
+  const getUserStats = useCallback(async () => {
+    try {
+      const stats = await collectionsAPI.getUserStats();
+      return stats;
+    } catch (error) {
+      console.error('Error fetching user stats:', error);
+      toast.error('Failed to fetch user statistics');
+      return null;
     }
   }, []);
 
@@ -492,21 +591,25 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
   }, []);
 
   return (
-    <CollectionContext.Provider value={{ 
-      collectionState, 
-      fetchCollections, 
-      setSearchTerm,
-      fetchCollection, 
-      createCollection, 
-      updateCollection, 
-      deleteCollection, 
-      shareCollection,
-      getSharedUsers,
-      removeSharedUser,
-      addEntry, 
-      updateEntry, 
-      deleteEntry 
-    }}>
+    <CollectionContext.Provider
+      value={{
+        collectionState,
+        fetchCollections,
+        setSearchTerm,
+        fetchCollection,
+        createCollection,
+        updateCollection,
+        deleteCollection,
+        deleteAllCollections,
+        getUserStats,
+        shareCollection,
+        getSharedUsers,
+        removeSharedUser,
+        addEntry,
+        updateEntry,
+        deleteEntry,
+      }}
+    >
       {children}
     </CollectionContext.Provider>
   );

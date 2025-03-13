@@ -15,11 +15,34 @@ import Footer from './components/Footer';
 // Protected route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { authState } = useAuth();
+  const [loadingTimeout, setLoadingTimeout] = React.useState(false);
+  
+  // Add a timeout to detect stuck loading states
+  React.useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
+    if (authState.isLoading) {
+      timeoutId = setTimeout(() => {
+        setLoadingTimeout(true);
+      }, 5000); // 5 seconds timeout
+    }
+    
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [authState.isLoading]);
+  
+  // Force reload the page if loading times out
+  const handleForceReload = () => {
+    window.location.reload();
+  };
   
   if (authState.isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <svg className="animate-spin h-10 w-10 text-primary-500" viewBox="0 0 24 24">
+      <div className="min-h-screen flex flex-col items-center justify-center">
+        <svg className="animate-spin h-10 w-10 text-primary-500 mb-4" viewBox="0 0 24 24">
           <circle
             className="opacity-25"
             cx="12"
@@ -35,6 +58,19 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
           />
         </svg>
+        <p className="text-dark-500 mb-2">Loading...</p>
+        
+        {loadingTimeout && (
+          <div className="text-center mt-4">
+            <p className="text-red-600 mb-2">Loading is taking longer than expected.</p>
+            <button 
+              onClick={handleForceReload}
+              className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors"
+            >
+              Reload Page
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -118,6 +154,52 @@ const AppRoutes: React.FC = () => {
 
 // Main App component
 const App: React.FC = () => {
+  // Add a global reset function that can be triggered by pressing Escape key 5 times quickly
+  const [keyPressCount, setKeyPressCount] = React.useState(0);
+  const [showResetOption, setShowResetOption] = React.useState(false);
+  const keyPressTimer = React.useRef<NodeJS.Timeout | null>(null);
+  
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setKeyPressCount(prev => prev + 1);
+        
+        if (keyPressTimer.current) {
+          clearTimeout(keyPressTimer.current);
+        }
+        
+        keyPressTimer.current = setTimeout(() => {
+          setKeyPressCount(0);
+        }, 2000);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (keyPressTimer.current) {
+        clearTimeout(keyPressTimer.current);
+      }
+    };
+  }, []);
+  
+  React.useEffect(() => {
+    if (keyPressCount >= 5) {
+      setShowResetOption(true);
+      setKeyPressCount(0);
+    }
+  }, [keyPressCount]);
+  
+  const handleReset = () => {
+    localStorage.clear();
+    window.location.href = '/login';
+  };
+  
+  const handleDismiss = () => {
+    setShowResetOption(false);
+  };
+  
   return (
     <Router>
       <AuthProvider>
@@ -148,6 +230,33 @@ const App: React.FC = () => {
             }}
           />
           <AppRoutes />
+          
+          {/* Emergency reset dialog */}
+          {showResetOption && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 max-w-md">
+                <h2 className="text-xl font-bold mb-4">App Recovery</h2>
+                <p className="mb-4">
+                  It looks like you may be experiencing issues with the app. 
+                  Would you like to reset the app state? This will log you out and clear local data.
+                </p>
+                <div className="flex space-x-4">
+                  <button 
+                    onClick={handleReset}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  >
+                    Reset App
+                  </button>
+                  <button 
+                    onClick={handleDismiss}
+                    className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </CollectionProvider>
       </AuthProvider>
     </Router>

@@ -1,12 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiUser, FiMail, FiEdit, FiSave, FiX, FiLock } from 'react-icons/fi';
+import { FiUser, FiMail, FiEdit, FiSave, FiX, FiLock, FiDatabase } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
+import { useCollection } from '../hooks/useCollection';
+import Modal from './Modal';
+import { toast } from 'react-hot-toast';
+
+interface UserStats {
+  totalCollections: number;
+  totalEntries: number;
+  createdAt: string;
+  lastActive: string;
+}
 
 const Profile: React.FC = () => {
   const { authState, updateProfile, logout } = useAuth();
+  const { deleteAllCollections, getUserStats } = useCollection();
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [formData, setFormData] = useState({
     username: authState.user?.username || '',
     email: authState.user?.email || '',
@@ -18,6 +33,26 @@ const Profile: React.FC = () => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Fetch user stats
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      setIsLoadingStats(true);
+      try {
+        const stats = await getUserStats();
+        if (stats) {
+          setUserStats(stats);
+        }
+      } catch (error) {
+        console.error('Error fetching user stats:', error);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchUserStats();
+  }, [getUserStats]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -133,6 +168,49 @@ const Profile: React.FC = () => {
   const getInitials = () => {
     const username = authState.user?.username || '';
     return username.charAt(0).toUpperCase();
+  };
+
+  // Format date for display
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Handle delete all collections
+  const handleDeleteAllCollections = async () => {
+    if (deleteConfirmation !== authState.user?.username) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const success = await deleteAllCollections();
+      
+      if (success) {
+        setShowDeleteAllModal(false);
+        setDeleteConfirmation('');
+        toast.success('All collections deleted successfully');
+      } else {
+        toast.error('Failed to delete all collections');
+      }
+    } catch (error) {
+      console.error('Error in handleDeleteAllCollections:', error);
+      toast.error('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+      
+      // Force reset loading state after a timeout
+      setTimeout(() => {
+        setIsLoading(false);
+      }, 2000);
+    }
   };
 
   return (
@@ -274,7 +352,7 @@ const Profile: React.FC = () => {
           </div>
           
           {/* Password Change Section */}
-          <div className="card">
+          <div className="card mb-6">
             <h2 className="text-xl font-bold text-dark-800 mb-4">Change Password</h2>
             
             {showPasswordForm ? (
@@ -388,8 +466,156 @@ const Profile: React.FC = () => {
               </button>
             )}
           </div>
+
+          {/* User Stats Section */}
+          <div className="card mb-6">
+            <div className="flex items-center mb-4">
+              <FiDatabase className="text-primary-500 mr-2" size={20} />
+              <h2 className="text-xl font-bold text-dark-800">Account Statistics</h2>
+            </div>
+            
+            {isLoadingStats ? (
+              <div className="flex justify-center py-6">
+                <svg className="animate-spin h-8 w-8 text-primary-500" viewBox="0 0 24 24">
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    fill="none"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                  <span className="text-dark-500">Total Collections</span>
+                  <span className="font-medium text-dark-800">{userStats?.totalCollections || 0}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                  <span className="text-dark-500">Total Entries</span>
+                  <span className="font-medium text-dark-800">{userStats?.totalEntries || 0}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                  <span className="text-dark-500">Account Created</span>
+                  <span className="font-medium text-dark-800">{formatDate(userStats?.createdAt)}</span>
+                </div>
+                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-md">
+                  <span className="text-dark-500">Last Active</span>
+                  <span className="font-medium text-dark-800">{formatDate(userStats?.lastActive)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Danger Zone Section */}
+          <div className="card border border-red-200">
+            <div className="flex items-center mb-4">
+              <FiLock className="text-red-500 mr-2" size={20} />
+              <h2 className="text-xl font-bold text-dark-800">Danger Zone</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="p-4 border border-red-200 rounded-md">
+                <h3 className="font-medium text-dark-800 mb-1">Delete All Collections</h3>
+                <p className="text-dark-500 text-sm mb-3">
+                  This will permanently delete all your collections and their entries. This action cannot be undone.
+                </p>
+                <button
+                  onClick={() => setShowDeleteAllModal(true)}
+                  className="btn-danger"
+                >
+                  {isLoading ? (
+                    <span className="flex items-center justify-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Deleting...
+                    </span>
+                  ) : (
+                    'Delete All Collections'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </motion.div>
       </div>
+
+      {/* Delete All Collections Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteAllModal}
+        onClose={() => {
+          setShowDeleteAllModal(false);
+          setDeleteConfirmation('');
+        }}
+        title="Delete All Collections"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center p-3 bg-red-50 text-red-800 rounded-md">
+            <FiLock className="mr-2 flex-shrink-0" size={20} />
+            <p>
+              This action will permanently delete all your collections and their entries. 
+              This cannot be undone.
+            </p>
+          </div>
+          
+          <p className="text-dark-500">
+            To confirm, please type your username <strong>{authState.user?.username}</strong> below:
+          </p>
+          
+          <input
+            type="text"
+            value={deleteConfirmation}
+            onChange={(e) => setDeleteConfirmation(e.target.value)}
+            className="form-input"
+            placeholder="Enter your username"
+          />
+          
+          <div className="flex space-x-3 pt-2">
+            <button
+              onClick={handleDeleteAllCollections}
+              disabled={deleteConfirmation !== authState.user?.username || isLoading}
+              className={`btn-danger flex-1 ${
+                deleteConfirmation !== authState.user?.username || isLoading
+                  ? 'opacity-50 cursor-not-allowed'
+                  : ''
+              }`}
+            >
+              {isLoading ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Deleting...
+                </span>
+              ) : (
+                'Delete All Collections'
+              )}
+            </button>
+            
+            <button
+              onClick={() => {
+                setShowDeleteAllModal(false);
+                setDeleteConfirmation('');
+              }}
+              className="btn-secondary flex-1"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

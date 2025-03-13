@@ -64,13 +64,14 @@ const CollectionList: React.FC = () => {
           !isLoadingMore && 
           collectionState.pagination?.hasMore
         ) {
+          console.log('Loading more collections...');
           setIsLoadingMore(true);
           const nextPage = (collectionState.pagination?.page || 1) + 1;
           await fetchCollections(nextPage);
           setIsLoadingMore(false);
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1, rootMargin: '100px' }
     );
 
     const currentTarget = observerTarget.current;
@@ -626,10 +627,10 @@ const CollectionList: React.FC = () => {
             {/* Infinite scroll observer target */}
             <div 
               ref={observerTarget} 
-              className="h-10 w-full flex justify-center items-center mt-8"
+              className="h-20 w-full flex justify-center items-center mt-8"
             >
               {(isLoadingMore || (collectionState.isLoading && collectionState.collections.length > 0)) && (
-                <svg className="animate-spin h-6 w-6 text-primary-500" viewBox="0 0 24 24">
+                <svg className="animate-spin h-8 w-8 text-primary-500" viewBox="0 0 24 24">
                   <circle
                     className="opacity-25"
                     cx="12"
@@ -652,6 +653,9 @@ const CollectionList: React.FC = () => {
                     ? `End of results for "${collectionState.searchTerm}"` 
                     : "No more collections to load"}
                 </p>
+              )}
+              {!isLoadingMore && collectionState.pagination?.hasMore && (
+                <p className="text-dark-500 text-sm">Scroll for more collections</p>
               )}
             </div>
           </>
