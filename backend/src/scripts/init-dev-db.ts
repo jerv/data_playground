@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
 import { User } from '../models/user';
-import { Collection } from '../models/collection';
+import { Collection, FieldType } from '../models/collection';
 import bcrypt from 'bcrypt';
 
 // Load environment variables
@@ -40,20 +40,41 @@ async function initDevDatabase() {
     const sampleCollection = new Collection({
       name: 'Sample Collection',
       description: 'A sample collection for development',
-      owner: testUser._id,
+      user: testUser._id,
       fields: [
-        { name: 'name', type: 'string' },
-        { name: 'age', type: 'number' },
-        { name: 'isActive', type: 'boolean' }
+        { name: 'name', type: 'text' as FieldType },
+        { name: 'age', type: 'number' as FieldType },
+        { name: 'rating', type: 'rating' as FieldType }
       ],
       entries: [
-        { name: 'John Doe', age: 30, isActive: true },
-        { name: 'Jane Smith', age: 25, isActive: false },
-        { name: 'Bob Johnson', age: 40, isActive: true }
-      ]
+        { name: 'John Doe', age: 30, rating: 5 },
+        { name: 'Jane Smith', age: 25, rating: 3 },
+        { name: 'Bob Johnson', age: 40, rating: 4 }
+      ],
+      sharedWith: []
     });
     await sampleCollection.save();
     console.log('Sample collection created');
+
+    // Create another sample collection
+    console.log('Creating another sample collection...');
+    const anotherCollection = new Collection({
+      name: 'Task List',
+      user: testUser._id,
+      fields: [
+        { name: 'task', type: 'text' as FieldType },
+        { name: 'dueDate', type: 'date' as FieldType },
+        { name: 'priority', type: 'rating' as FieldType }
+      ],
+      entries: [
+        { task: 'Complete project', dueDate: new Date('2023-12-31'), priority: 5 },
+        { task: 'Review code', dueDate: new Date('2023-12-15'), priority: 4 },
+        { task: 'Update documentation', dueDate: new Date('2023-12-20'), priority: 3 }
+      ],
+      sharedWith: []
+    });
+    await anotherCollection.save();
+    console.log('Second sample collection created');
 
     console.log('Development database initialized successfully!');
     console.log('You can now log in with:');
