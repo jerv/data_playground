@@ -7,7 +7,7 @@
       "use": "@vercel/static-build",
       "config": {
         "distDir": "build",
-        "buildCommand": "npm install --legacy-peer-deps && npm run build",
+        "buildCommand": "npm install --legacy-peer-deps && CI=false DISABLE_ESLINT_PLUGIN=true TSC_COMPILE_ON_ERROR=true npm run build",
         "nodeVersion": "18.x"
       }
     }

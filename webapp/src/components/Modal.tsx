@@ -84,47 +84,46 @@ const Modal: React.FC<ModalProps> = ({
     }
   };
 
+  // Using a different approach to avoid the AnimatePresence TypeScript error
+  if (!isOpen) return null;
+
   return (
-    <AnimatePresence mode="wait">
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Modal content */}
-          <motion.div 
-            ref={modalRef}
-            className={`bg-white rounded-lg shadow-xl w-full ${maxWidth} max-h-[90vh] flex flex-col z-10`}
-            variants={modalVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Modal content */}
+      <motion.div 
+        ref={modalRef}
+        className={`bg-white rounded-lg shadow-xl w-full ${maxWidth} max-h-[90vh] flex flex-col z-10`}
+        variants={modalVariants}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+      >
+        <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-dark-800">{title}</h2>
+          <button
+            onClick={onClose}
+            className="text-dark-500 hover:text-dark-700 transition-colors"
+            aria-label="Close modal"
           >
-            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-dark-800">{title}</h2>
-              <button
-                onClick={onClose}
-                className="text-dark-500 hover:text-dark-700 transition-colors"
-                aria-label="Close modal"
-              >
-                <FiX size={20} />
-              </button>
-            </div>
-            <div className="px-6 py-4 overflow-y-auto">
-              {children}
-            </div>
-          </motion.div>
-          
-          {/* Semi-transparent overlay behind the modal */}
-          <motion.div 
-            className="fixed inset-0 bg-black bg-opacity-50"
-            variants={overlayVariants}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
-            transition={{ duration: 0.2 }}
-            style={{ zIndex: 5 }}
-          />
+            <FiX size={20} />
+          </button>
         </div>
-      )}
-    </AnimatePresence>
+        <div className="px-6 py-4 overflow-y-auto">
+          {children}
+        </div>
+      </motion.div>
+      
+      {/* Semi-transparent overlay behind the modal */}
+      <motion.div 
+        className="fixed inset-0 bg-black bg-opacity-50"
+        variants={overlayVariants}
+        initial="hidden"
+        animate="visible"
+        exit="hidden"
+        transition={{ duration: 0.2 }}
+        style={{ zIndex: 5 }}
+      />
+    </div>
   );
 };
 
