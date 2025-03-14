@@ -2,15 +2,11 @@ import axios from 'axios';
 import { LoginCredentials, RegisterCredentials, ProfileUpdateData, User } from '../types/user';
 import { Collection, PaginationInfo, CollectionFormData, Entry, FieldType, ShareFormData, SharedUser } from '../types/collection';
 
-// Get the API URL from environment variables with fallbacks
-// First check window.env (runtime), then process.env (build time), then use development fallback
-const API_URL = (window as any).env?.REACT_APP_API_URL || 
-                process.env.REACT_APP_API_URL || 
-                (process.env.NODE_ENV === 'production' 
-                  ? 'https://data-playground.onrender.com/api'
-                  : 'http://localhost:5000/api');
+// FORCE LOCAL API - Hardcoded to ensure we're using the local backend
+// This completely ignores any environment variables
+const API_URL = 'http://localhost:5000/api';
 
-console.log('API Service initialized with URL:', API_URL, 'Environment:', process.env.NODE_ENV);
+console.log('API Service FORCED to use LOCAL backend:', API_URL);
 
 // Create an axios instance with a base URL
 const api = axios.create({

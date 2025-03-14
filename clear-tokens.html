@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Local Storage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+    </style>
+</head>
+<body>
+    <h1>Clear Local Storage</h1>
+    <p>This page will clear your browser's localStorage for this domain, removing any stored authentication tokens.</p>
+    <p>This will force you to log in again with the test user credentials.</p>
+    
+    <button id="clearButton">Clear Local Storage</button>
+    
+    <div id="result" class="result">
+        <p id="resultMessage"></p>
+    </div>
+    
+    <script>
+        document.getElementById('clearButton').addEventListener('click', function() {
+            try {
+                // Get the current items in localStorage
+                const itemsBefore = Object.keys(localStorage);
+                console.log('Items before clearing:', itemsBefore);
+                
+                // Clear localStorage
+                localStorage.clear();
+                
+                // Verify it's cleared
+                const itemsAfter = Object.keys(localStorage);
+                console.log('Items after clearing:', itemsAfter);
+                
+                // Show success message
+                const resultDiv = document.getElementById('result');
+                const resultMessage = document.getElementById('resultMessage');
+                
+                resultDiv.className = 'result success';
+                resultDiv.style.display = 'block';
+                resultMessage.textContent = `Successfully cleared ${itemsBefore.length} items from localStorage. You can now close this page and go back to the app. You'll need to log in again with the test user credentials.`;
+            } catch (error) {
+                console.error('Error clearing localStorage:', error);
+                
+                const resultDiv = document.getElementById('result');
+                const resultMessage = document.getElementById('resultMessage');
+                
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+                resultMessage.textContent = `Error clearing localStorage: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html> 
