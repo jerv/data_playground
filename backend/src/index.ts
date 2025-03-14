@@ -23,9 +23,11 @@ const PORT = process.env.PORT || 5000;
 
 // CORS configuration
 const corsOptions = {
-  origin: '*', // Allow all origins during development
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  origin: [
+    'https://dataplayground.jeremyvenegas.com',
+    // Include other origins if needed
+  ],
+  credentials: true
 };
 
 // Middleware
