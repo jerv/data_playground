@@ -8,7 +8,8 @@ import { authenticate } from '../middleware/auth';
 const router = express.Router();
 
 // Registration code for protecting new account creation
-const REGISTRATION_CODE = 'welcome123';
+// Use environment variable if available, otherwise use hardcoded value
+const REGISTRATION_CODE = process.env.REGISTRATION_CODE || 'welcome123';
 
 // Validation schemas using Zod
 const registerSchema = z.object({
@@ -39,64 +40,109 @@ const profileUpdateSchema = z.object({
   path: ['currentPassword', 'newPassword'],
 });
 
-// Register a new user
+// Register user
 router.post('/register', async (req: Request, res: Response) => {
   try {
+    console.log('Registration request received:', req.body);
+    console.log('Environment variables check:', {
+      mongodbUri: process.env.MONGODB_URI ? 'Set (starts with: ' + process.env.MONGODB_URI.substring(0, 10) + '...)' : 'Not set',
+      jwtSecret: process.env.JWT_SECRET ? 'Set (length: ' + process.env.JWT_SECRET.length + ')' : 'Not set',
+      registrationCode: process.env.REGISTRATION_CODE || REGISTRATION_CODE,
+      nodeEnv: process.env.NODE_ENV || 'Not set'
+    });
+    
     // Validate request body
-    const validatedData = registerSchema.parse(req.body);
-    
-    // Check registration code
-    if (validatedData.registrationCode !== REGISTRATION_CODE) {
-      return res.status(403).json({
-        success: false,
-        message: 'Invalid registration code',
+    try {
+      const validatedData = registerSchema.parse(req.body);
+      console.log('Registration data validated successfully');
+      
+      // Check registration code
+      if (validatedData.registrationCode !== REGISTRATION_CODE) {
+        console.log('Invalid registration code provided:', validatedData.registrationCode);
+        console.log('Expected registration code:', REGISTRATION_CODE);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid registration code',
+        });
+      }
+      
+      console.log('Registration code validated successfully');
+      
+      // Sanitize inputs
+      const sanitizedEmail = sanitize(validatedData.email);
+      const sanitizedUsername = sanitize(validatedData.username);
+      
+      console.log('Sanitized inputs:', { email: sanitizedEmail, username: sanitizedUsername });
+      
+      // Check if user already exists
+      const existingUser = await User.findOne({
+        $or: [
+          { email: sanitizedEmail },
+          { username: sanitizedUsername },
+        ],
       });
-    }
-    
-    // Sanitize inputs
-    const sanitizedData = {
-      username: sanitize(validatedData.username),
-      email: sanitize(validatedData.email),
-      password: validatedData.password, // Don't sanitize password as it will be hashed
-    };
-
-    // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [
-        { email: sanitizedData.email },
-        { username: sanitizedData.username },
-      ],
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: 'User with this email or username already exists',
+      
+      if (existingUser) {
+        console.log('User already exists:', existingUser.email);
+        return res.status(400).json({
+          success: false,
+          message: 'User with this email or username already exists',
+        });
+      }
+      
+      console.log('No existing user found, proceeding with creation');
+      
+      // Create new user
+      const user = new User({
+        username: sanitizedUsername,
+        email: sanitizedEmail,
+        password: validatedData.password,
       });
-    }
-
-    // Create new user
-    const user = await User.create(sanitizedData);
-
-    return res.status(201).json({
-      success: true,
-      message: 'User registered successfully',
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
+      
+      console.log('User object created, about to save');
+      
+      await user.save();
+      
+      console.log('User saved successfully:', user._id);
+      
+      // Generate JWT token
+      const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
+      console.log('Using JWT secret:', jwtSecret.substring(0, 3) + '...');
+      
+      const token = jwt.sign(
+        { id: user._id },
+        jwtSecret,
+        {
+          expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+        }
+      );
+      
+      console.log('JWT token generated successfully');
+      
+      return res.status(201).json({
+        success: true,
+        message: 'User registered successfully',
+        token,
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+        },
+      });
+    } catch (validationError) {
+      console.error('Validation error:', validationError);
       return res.status(400).json({
         success: false,
         message: 'Validation error',
-        errors: error.errors.map(e => ({
-          field: e.path.join('.'),
-          message: e.message,
-        })),
+        errors: validationError,
       });
     }
-
+  } catch (error) {
+    console.error('Server error during registration:', error);
     return res.status(500).json({
       success: false,
-      message: 'Server error during registration',
+      message: 'Server error',
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 });

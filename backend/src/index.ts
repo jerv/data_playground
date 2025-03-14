@@ -22,15 +22,50 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
+// Add a test endpoint
+app.get('/api/test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Backend is accessible',
+    env: {
+      nodeEnv: process.env.NODE_ENV || 'Not set',
+      registrationCode: process.env.REGISTRATION_CODE ? 'Set (value: ' + process.env.REGISTRATION_CODE + ')' : 'Not set',
+      jwtSecret: process.env.JWT_SECRET ? 'Set (length: ' + process.env.JWT_SECRET.length + ')' : 'Not set',
+      mongoUri: process.env.MONGODB_URI ? 'Set (masked: ' + (process.env.MONGODB_URI.replace(/mongodb(\+srv)?:\/\/([^:]+):([^@]+)@/, 'mongodb$1://****:****@')) + ')' : 'Not set',
+      port: process.env.PORT || 'Not set (will use default)'
+    },
+    mongoConnection: {
+      readyState: mongoose.connection.readyState,
+      status: getMongoConnectionStatus(mongoose.connection.readyState),
+      host: mongoose.connection.host || 'Not connected',
+      name: mongoose.connection.name || 'Not connected'
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Helper function to get MongoDB connection status
+function getMongoConnectionStatus(readyState: number): string {
+  switch (readyState) {
+    case 0: return 'Disconnected';
+    case 1: return 'Connected';
+    case 2: return 'Connecting';
+    case 3: return 'Disconnecting';
+    default: return 'Unknown';
+  }
+}
+
 // Connect to MongoDB
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/data_playground';
+console.log('MongoDB connection string (masked):', MONGODB_URI.replace(/mongodb(\+srv)?:\/\/([^:]+):([^@]+)@/, 'mongodb$1://****:****@'));
 
 // Only connect to MongoDB if not already connected
 if (mongoose.connection.readyState === 0) {
+  console.log('Attempting to connect to MongoDB...');
   mongoose
     .connect(MONGODB_URI)
     .then(() => {
-      console.log('Connected to MongoDB');
+      console.log('Connected to MongoDB successfully');
     })
     .catch((error) => {
       console.error('MongoDB connection error:', error);
@@ -39,6 +74,8 @@ if (mongoose.connection.readyState === 0) {
         process.exit(1);
       }
     });
+} else {
+  console.log('Already connected to MongoDB, connection state:', mongoose.connection.readyState);
 }
 
 // Routes

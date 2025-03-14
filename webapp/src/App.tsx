@@ -11,6 +11,7 @@ import CollectionDetail from './components/CollectionDetail';
 import NotFound from './components/NotFound';
 import Header from './components/Header';
 import Footer from './components/Footer';
+import TestConnection from './components/TestConnection';
 
 // Protected route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -141,6 +142,8 @@ const AppRoutes: React.FC = () => {
           <CollectionDetail />
         </ProtectedRoute>
       } />
+      
+      <Route path="/test" element={<TestConnection />} />
       
       <Route path="/" element={<Navigate to="/playground" />} />
       <Route path="*" element={
