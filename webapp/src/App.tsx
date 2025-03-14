@@ -12,6 +12,7 @@ import NotFound from './components/NotFound';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import TestConnection from './components/TestConnection';
+import DebugPanel from './components/DebugPanel';
 
 // Protected route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -233,6 +234,9 @@ const App: React.FC = () => {
             }}
           />
           <AppRoutes />
+          
+          {/* Debug Panel */}
+          <DebugPanel />
           
           {/* Emergency reset dialog */}
           {showResetOption && (

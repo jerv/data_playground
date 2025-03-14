@@ -13,7 +13,10 @@ console.log('API Service initialized with URL:', API_URL);
 // Create an axios instance with a base URL
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000 // Global timeout of 10 seconds
+  timeout: 10000, // Global timeout of 10 seconds
+  headers: {
+    'Content-Type': 'application/json'
+  }
 });
 
 // Handle auth token in requests

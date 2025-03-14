@@ -12,13 +12,36 @@ dotenv.config();
 const app = express();
 
 // Configure CORS for cross-domain requests
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://data-playground-nine.vercel.app',
+  'https://data-playground.vercel.app',
+  'https://data-playground-nine.vercel.app',
+  'https://data-playground-jerv.vercel.app'
+];
+
 const corsOptions = {
-  origin: '*', // Allow requests from any origin
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (like mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+    
+    console.log('Request origin:', origin);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('vercel.app')) {
+      callback(null, true);
+    } else {
+      console.log('Origin not allowed by CORS:', origin);
+      // Still allow the request to proceed, but log it
+      callback(null, true);
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  credentials: true
 };
 
-console.log('CORS configuration:', corsOptions);
+console.log('CORS configuration:', JSON.stringify(corsOptions, null, 2));
+console.log('Allowed origins:', allowedOrigins);
 
 // Middleware
 app.use(cors(corsOptions));
@@ -28,12 +51,20 @@ app.use(express.json());
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
   console.log('Headers:', JSON.stringify(req.headers));
-  console.log('Body:', JSON.stringify(req.body));
+  if (req.method !== 'GET') {
+    console.log('Body:', JSON.stringify(req.body));
+  }
   
   // Add CORS headers directly to ensure they're set
-  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   
   next();
 });
