@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiArrowLeft, FiEdit, FiTrash2, FiPlus, FiUser } from 'react-icons/fi';
+import { FiArrowLeft, FiEdit, FiTrash2, FiPlus, FiUser, FiChevronDown } from 'react-icons/fi';
 import { useCollection } from '../hooks/useCollection';
 import EntryForm from './EntryForm';
 import StarRating from './StarRating';
@@ -20,6 +20,8 @@ const CollectionDetail: React.FC = () => {
   const [editingEntryIndex, setEditingEntryIndex] = useState<number | null>(null);
   const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<number | null>(null);
   const [confirmDeleteCollection, setConfirmDeleteCollection] = useState(false);
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     if (id) {
@@ -65,6 +67,48 @@ const CollectionDetail: React.FC = () => {
         navigate('/playground');
       }
     }
+  };
+
+  const handleSort = (fieldName: string) => {
+    if (sortField === fieldName) {
+      // Toggle direction if clicking the same field
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Set new field and default to ascending
+      setSortField(fieldName);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortedEntries = () => {
+    if (!sortField) return entries;
+    
+    return [...entries].sort((a, b) => {
+      const aValue = a[sortField];
+      const bValue = b[sortField];
+      
+      // Handle different data types
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+      
+      // Handle dates
+      if (aValue instanceof Date && bValue instanceof Date) {
+        return sortDirection === 'asc' 
+          ? aValue.getTime() - bValue.getTime() 
+          : bValue.getTime() - aValue.getTime();
+      }
+      
+      // Handle strings and other types
+      const aString = String(aValue || '').toLowerCase();
+      const bString = String(bValue || '').toLowerCase();
+      
+      if (sortDirection === 'asc') {
+        return aString.localeCompare(bString);
+      } else {
+        return bString.localeCompare(aString);
+      }
+    });
   };
 
   // Helper function to format date
@@ -325,8 +369,22 @@ const CollectionDetail: React.FC = () => {
                   <thead className="table-header">
                     <tr>
                       {collection.fields.map((field, index) => (
-                        <th key={index} className="table-header-cell">
-                          {field.name}
+                        <th 
+                          key={index} 
+                          className="table-header-cell cursor-pointer hover:bg-gray-100"
+                          onClick={() => handleSort(field.name)}
+                        >
+                          <div className="flex items-center">
+                            {field.name}
+                            {sortField === field.name && (
+                              <span className="ml-1">
+                                {sortDirection === 'asc' ? 
+                                  <FiChevronDown className="transform rotate-180" /> : 
+                                  <FiChevronDown />
+                                }
+                              </span>
+                            )}
+                          </div>
                         </th>
                       ))}
                       {canEdit && (
@@ -335,7 +393,7 @@ const CollectionDetail: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="table-body">
-                    {entries.map((entry, entryIndex) => (
+                    {getSortedEntries().map((entry, entryIndex) => (
                       <tr key={entryIndex} className="table-row table-row-zebra">
                         {collection.fields.map((field, fieldIndex) => (
                           <td key={fieldIndex} className="table-cell">

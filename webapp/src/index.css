@@ -104,6 +104,6 @@
   }
   
   .table-row-zebra:nth-child(odd) {
-    @apply bg-gray-50;
+    @apply bg-gray-100;
   }
 } 
