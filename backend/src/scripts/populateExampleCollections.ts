@@ -173,7 +173,7 @@ const generateEntries = (fields: any[], count: number) => {
 const populateCollections = async (email: string, count: number) => {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/data-playground');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/data_playground_dev');
     console.log('Connected to MongoDB');
     
     // Find user by email
