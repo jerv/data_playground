@@ -1,7 +1,6 @@
 {
   "version": 2,
-  "framework": "create-react-app",
-  "buildCommand": "cd webapp && npm install && npm run build",
+  "buildCommand": "cd webapp && ./vercel-build.sh",
   "outputDirectory": "webapp/build",
   "routes": [
     {
@@ -15,10 +14,6 @@
     {
       "src": "/manifest.json",
       "dest": "/manifest.json"
-    },
-    {
-      "src": "/logo192.png",
-      "dest": "/logo192.png"
     },
     {
       "src": "/(.*)",
