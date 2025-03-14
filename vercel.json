@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "./build.sh",
+  "buildCommand": "./build-vercel.sh",
   "outputDirectory": "webapp/build",
   "rewrites": [
     {
