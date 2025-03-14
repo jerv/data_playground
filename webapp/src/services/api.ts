@@ -2,11 +2,13 @@ import axios from 'axios';
 import { LoginCredentials, RegisterCredentials, ProfileUpdateData, User } from '../types/user';
 import { Collection, PaginationInfo, CollectionFormData, Entry, FieldType, ShareFormData, SharedUser } from '../types/collection';
 
-// FORCE LOCAL API - Hardcoded to ensure we're using the local backend
-// This completely ignores any environment variables
-const API_URL = 'http://localhost:5000/api';
+// Get the API URL from environment variables with fallbacks
+const API_URL = process.env.REACT_APP_API_URL || 
+                (process.env.NODE_ENV === 'production' 
+                  ? 'https://data-playground.onrender.com/api'
+                  : 'http://localhost:5000/api');
 
-console.log('API Service FORCED to use LOCAL backend:', API_URL);
+console.log('API Service initialized with URL:', API_URL, 'Environment:', process.env.NODE_ENV);
 
 // Create an axios instance with a base URL
 const api = axios.create({
@@ -24,10 +26,12 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
 
     // Log request details in development
-    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    console.log('Request data:', config.data);
-    console.log('Token exists:', !!token);
-    console.log('Full request URL:', `${API_URL}${config.url}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
+      console.log('Request data:', config.data);
+      console.log('Token exists:', !!token);
+      console.log('Full request URL:', `${API_URL}${config.url}`);
+    }
 
     // If token exists, add to headers
     if (token) {

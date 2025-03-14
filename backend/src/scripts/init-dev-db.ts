@@ -5,24 +5,19 @@ import { User } from '../models/user';
 import { Collection, FieldType } from '../models/collection';
 import bcrypt from 'bcrypt';
 
-// Force override MongoDB URI for development
-process.env.MONGODB_URI = 'mongodb://localhost:27017/dev_playground_completely_separate';
-
-// Load environment variables (after overriding)
-dotenv.config();
+// Load development environment variables
+dotenv.config({ path: path.resolve(__dirname, '../../.env.development') });
 
 console.log('==== INITIALIZING DEVELOPMENT DATABASE ====');
 console.log('MongoDB URI:', process.env.MONGODB_URI);
 console.log('===========================================');
 
-const MONGODB_URI = 'mongodb://localhost:27017/dev_playground_completely_separate';
-
 async function initDevDatabase() {
   console.log('Initializing development database...');
-  console.log(`Connecting to MongoDB at: ${MONGODB_URI}`);
+  console.log(`Connecting to MongoDB at: ${process.env.MONGODB_URI}`);
 
   try {
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI as string);
     console.log('Connected to MongoDB');
 
     // Clear existing data
