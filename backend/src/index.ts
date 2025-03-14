@@ -11,8 +11,15 @@ dotenv.config();
 // Create Express app
 const app = express();
 
+// Configure CORS for cross-domain requests
+const corsOptions = {
+  origin: '*', // Allow requests from any origin in development
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Connect to MongoDB

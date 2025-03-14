@@ -7,9 +7,7 @@
     "backend"
   ],
   "scripts": {
-    "build": "npm run build:webapp && npm run build:backend",
-    "build:webapp": "cd webapp && npm install && npm run build",
-    "build:backend": "cd backend && npm install && npm run build",
+    "build": "cd backend && npm install && npm run build",
     "start": "cd backend && npm start"
   },
   "engines": {
