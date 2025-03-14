@@ -29,7 +29,15 @@ app.use((req, res, next) => {
 });
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/data_playground_dev')
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/data_playground_dev';
+console.log('==== CONNECTING TO MONGODB ====');
+console.log('MongoDB URI:', mongoUri);
+console.log('Environment variables:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('MONGODB_URI env var exists:', !!process.env.MONGODB_URI);
+console.log('==== END CONNECTION INFO ====');
+
+mongoose.connect(mongoUri)
   .then(() => {
     console.log('Connected to MongoDB');
   })
