@@ -2,9 +2,13 @@ import axios from 'axios';
 import { LoginCredentials, RegisterCredentials, ProfileUpdateData, User } from '../types/user';
 import { Collection, PaginationInfo, CollectionFormData, Entry, FieldType, ShareFormData, SharedUser } from '../types/collection';
 
+// Get the API URL from environment variables
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+console.log('API Service initialized with URL:', API_URL);
+
 // Create an axios instance with a base URL
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: API_URL,
   timeout: 10000 // Global timeout of 10 seconds
 });
 
@@ -18,6 +22,7 @@ api.interceptors.request.use(
     console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
     console.log('Request data:', config.data);
     console.log('Token exists:', !!token);
+    console.log('Full request URL:', `${API_URL}${config.url}`);
 
     // If token exists, add to headers
     if (token) {

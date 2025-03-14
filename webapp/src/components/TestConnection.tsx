@@ -6,14 +6,23 @@ const TestConnection: React.FC = () => {
   const [message, setMessage] = useState('');
   const [apiUrl, setApiUrl] = useState('');
 
+  // Get the API URL from environment variables
+  const getApiUrl = () => {
+    const url = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+    console.log('Using API URL:', url);
+    return url;
+  };
+
   useEffect(() => {
     const testConnection = async () => {
       try {
         setStatus('loading');
         setMessage('Testing connection to backend...');
-        setApiUrl(process.env.REACT_APP_API_URL || 'http://localhost:5000/api');
+        const url = getApiUrl();
+        setApiUrl(url);
         
-        const response = await axios.get(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/test`);
+        console.log('Attempting to connect to:', url);
+        const response = await axios.get(`${url}/test`);
         
         setStatus('success');
         setMessage(`Connection successful! Response: ${JSON.stringify(response.data)}`);
@@ -50,9 +59,11 @@ const TestConnection: React.FC = () => {
             try {
               setStatus('loading');
               setMessage('Testing registration endpoint...');
+              const url = getApiUrl();
               
+              console.log('Attempting registration at:', `${url}/auth/register`);
               const response = await axios.post(
-                `${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/auth/register`, 
+                `${url}/auth/register`, 
                 {
                   username: 'testuser' + Math.floor(Math.random() * 10000),
                   email: `testuser${Math.floor(Math.random() * 10000)}@example.com`,
