@@ -18,15 +18,21 @@ app.use(express.json());
 // Connect to MongoDB
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/data_playground';
 
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => {
-    console.log('Connected to MongoDB');
-  })
-  .catch((error) => {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  });
+// Only connect to MongoDB if not already connected
+if (mongoose.connection.readyState === 0) {
+  mongoose
+    .connect(MONGODB_URI)
+    .then(() => {
+      console.log('Connected to MongoDB');
+    })
+    .catch((error) => {
+      console.error('MongoDB connection error:', error);
+      // Don't exit process in serverless environment
+      if (process.env.NODE_ENV !== 'production') {
+        process.exit(1);
+      }
+    });
+}
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -50,9 +56,13 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
+// Start server if not in production (Vercel will handle this in production)
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-}); 
+// Export the app for serverless functions
+export default app; 
