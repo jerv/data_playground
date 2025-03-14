@@ -13,14 +13,30 @@ const app = express();
 
 // Configure CORS for cross-domain requests
 const corsOptions = {
-  origin: '*', // Allow requests from any origin in development
+  origin: '*', // Allow requests from any origin
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 };
+
+console.log('CORS configuration:', corsOptions);
 
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Log all requests
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log('Headers:', JSON.stringify(req.headers));
+  console.log('Body:', JSON.stringify(req.body));
+  
+  // Add CORS headers directly to ensure they're set
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  
+  next();
+});
 
 // Add a test endpoint
 app.get('/api/test', (req, res) => {
