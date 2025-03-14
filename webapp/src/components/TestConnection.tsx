@@ -6,9 +6,11 @@ const TestConnection: React.FC = () => {
   const [message, setMessage] = useState('');
   const [apiUrl, setApiUrl] = useState('');
 
-  // Get the API URL from environment variables
+  // Get the API URL from environment variables with fallbacks
   const getApiUrl = () => {
-    const url = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+    const url = (window as any).env?.REACT_APP_API_URL || 
+                process.env.REACT_APP_API_URL || 
+                'https://data-playground.onrender.com/api';
     console.log('Using API URL:', url);
     return url;
   };
@@ -86,6 +88,15 @@ const TestConnection: React.FC = () => {
         >
           Test Registration
         </button>
+      </div>
+      
+      <div className="mt-4">
+        <h3 className="font-bold">Environment Variables</h3>
+        <div className="p-3 bg-gray-100 rounded mt-2">
+          <p><strong>window.env?.REACT_APP_API_URL:</strong> {(window as any).env?.REACT_APP_API_URL || 'Not set'}</p>
+          <p><strong>process.env.REACT_APP_API_URL:</strong> {process.env.REACT_APP_API_URL || 'Not set'}</p>
+          <p><strong>process.env.NODE_ENV:</strong> {process.env.NODE_ENV || 'Not set'}</p>
+        </div>
       </div>
     </div>
   );
