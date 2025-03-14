@@ -1,23 +1,32 @@
 {
   "version": 2,
-  "buildCommand": "cd webapp && ./vercel-build.sh",
-  "outputDirectory": "webapp/build",
+  "public": true,
+  "builds": [
+    {
+      "src": "webapp/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build",
+        "buildCommand": "npm install --legacy-peer-deps && npm run build"
+      }
+    }
+  ],
   "routes": [
     {
       "src": "/static/(.*)",
-      "dest": "/static/$1"
+      "dest": "/webapp/build/static/$1"
     },
     {
       "src": "/favicon.ico",
-      "dest": "/favicon.ico"
+      "dest": "/webapp/build/favicon.ico"
     },
     {
       "src": "/manifest.json",
-      "dest": "/manifest.json"
+      "dest": "/webapp/build/manifest.json"
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/webapp/build/index.html"
     }
   ]
 } 
