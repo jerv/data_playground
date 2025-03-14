@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd webapp && npm install && npm run build && cd ../backend && npm install && npm run build",
+  "buildCommand": "./build.sh",
   "outputDirectory": "webapp/build",
   "rewrites": [
     {
