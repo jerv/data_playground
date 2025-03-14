@@ -65,9 +65,15 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 // Start server if not in production (Vercel will handle this in production)
 if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 5000;
+  const PORT = parseInt(process.env.PORT || '5000', 10);
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+  });
+} else {
+  // In production (Render.com), always listen on the PORT env variable
+  const PORT = parseInt(process.env.PORT || '8080', 10);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running in production on port ${PORT}`);
   });
 }
 
