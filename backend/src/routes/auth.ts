@@ -43,36 +43,21 @@ const profileUpdateSchema = z.object({
 // Register user
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    console.log('Registration request received:', req.body);
-    console.log('Environment variables check:', {
-      mongodbUri: process.env.MONGODB_URI ? 'Set (starts with: ' + process.env.MONGODB_URI.substring(0, 10) + '...)' : 'Not set',
-      jwtSecret: process.env.JWT_SECRET ? 'Set (length: ' + process.env.JWT_SECRET.length + ')' : 'Not set',
-      registrationCode: process.env.REGISTRATION_CODE || REGISTRATION_CODE,
-      nodeEnv: process.env.NODE_ENV || 'Not set'
-    });
-    
     // Validate request body
     try {
       const validatedData = registerSchema.parse(req.body);
-      console.log('Registration data validated successfully');
       
       // Check registration code
       if (validatedData.registrationCode !== REGISTRATION_CODE) {
-        console.log('Invalid registration code provided:', validatedData.registrationCode);
-        console.log('Expected registration code:', REGISTRATION_CODE);
         return res.status(400).json({
           success: false,
           message: 'Invalid registration code',
         });
       }
       
-      console.log('Registration code validated successfully');
-      
       // Sanitize inputs
       const sanitizedEmail = sanitize(validatedData.email);
       const sanitizedUsername = sanitize(validatedData.username);
-      
-      console.log('Sanitized inputs:', { email: sanitizedEmail, username: sanitizedUsername });
       
       // Check if user already exists
       const existingUser = await User.findOne({
@@ -83,14 +68,11 @@ router.post('/register', async (req: Request, res: Response) => {
       });
       
       if (existingUser) {
-        console.log('User already exists:', existingUser.email);
         return res.status(400).json({
           success: false,
           message: 'User with this email or username already exists',
         });
       }
-      
-      console.log('No existing user found, proceeding with creation');
       
       // Create new user
       const user = new User({
@@ -99,15 +81,10 @@ router.post('/register', async (req: Request, res: Response) => {
         password: validatedData.password,
       });
       
-      console.log('User object created, about to save');
-      
       await user.save();
-      
-      console.log('User saved successfully:', user._id);
       
       // Generate JWT token
       const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
-      console.log('Using JWT secret:', jwtSecret.substring(0, 3) + '...');
       
       const token = jwt.sign(
         { id: user._id },
@@ -116,8 +93,6 @@ router.post('/register', async (req: Request, res: Response) => {
           expiresIn: process.env.JWT_EXPIRES_IN || '7d',
         }
       );
-      
-      console.log('JWT token generated successfully');
       
       return res.status(201).json({
         success: true,
@@ -130,7 +105,6 @@ router.post('/register', async (req: Request, res: Response) => {
         },
       });
     } catch (validationError) {
-      console.error('Validation error:', validationError);
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -150,36 +124,27 @@ router.post('/register', async (req: Request, res: Response) => {
 // Login user
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    console.log('Login request received:', req.body);
-    
     // Validate request body
     try {
       const validatedData = loginSchema.parse(req.body);
-      console.log('Login data validated successfully');
       
       // Sanitize inputs
       const sanitizedEmail = sanitize(validatedData.email);
-      console.log('Attempting to find user with email:', sanitizedEmail);
 
       // Find user by email
       const user = await User.findOne({ email: sanitizedEmail });
 
       if (!user) {
-        console.log('User not found with email:', sanitizedEmail);
         return res.status(401).json({
           success: false,
           message: 'Invalid credentials',
         });
       }
-
-      console.log('User found:', user.username);
       
       // Check password
       const isPasswordValid = await user.comparePassword(validatedData.password);
-      console.log('Password validation result:', isPasswordValid);
 
       if (!isPasswordValid) {
-        console.log('Invalid password for user:', user.username);
         return res.status(401).json({
           success: false,
           message: 'Invalid credentials',
@@ -188,7 +153,6 @@ router.post('/login', async (req: Request, res: Response) => {
 
       // Generate JWT token
       const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
-      console.log('Using JWT secret:', jwtSecret.substring(0, 3) + '...');
       
       const token = jwt.sign(
         { id: user._id },
@@ -197,8 +161,6 @@ router.post('/login', async (req: Request, res: Response) => {
           expiresIn: process.env.JWT_EXPIRES_IN || '7d',
         }
       );
-      
-      console.log('JWT token generated successfully');
 
       return res.status(200).json({
         success: true,
@@ -212,7 +174,6 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     } catch (validationError) {
       if (validationError instanceof z.ZodError) {
-        console.error('Validation error:', validationError.errors);
         return res.status(400).json({
           success: false,
           message: 'Validation error',
@@ -337,21 +298,15 @@ router.patch('/profile', authenticate, async (req: Request, res: Response) => {
       });
     } else if (validatedData.currentPassword && validatedData.newPassword) {
       // If only password was updated
-      const user = await User.findById(req.user?._id);
       return res.status(200).json({
         success: true,
         message: 'Password updated successfully',
-        user: {
-          id: user?._id,
-          username: user?.username,
-          email: user?.email,
-        },
       });
     } else {
       // No changes were made
-      return res.status(400).json({
-        success: false,
-        message: 'No changes provided',
+      return res.status(200).json({
+        success: true,
+        message: 'No changes were made to the profile',
       });
     }
   } catch (error) {
@@ -366,9 +321,11 @@ router.patch('/profile', authenticate, async (req: Request, res: Response) => {
       });
     }
     
+    console.error('Server error updating profile:', error);
     return res.status(500).json({
       success: false,
       message: 'Server error updating profile',
+      error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });
