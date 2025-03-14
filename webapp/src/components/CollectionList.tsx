@@ -450,7 +450,10 @@ const CollectionList: React.FC = () => {
     <div className="bg-gray-50 py-12 px-4">
       <div className="max-w-6xl mx-auto">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-          <h1 className="text-2xl sm:text-3xl font-bold text-dark-800">My Collections</h1>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-dark-800">My Collections</h1>
+            <p className="text-sm text-dark-500 mt-1">Sorted by newest first</p>
+          </div>
           <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
             <div className="bg-white rounded-md shadow-sm p-1 flex">
               <button
@@ -532,7 +535,13 @@ const CollectionList: React.FC = () => {
           onClose={() => setShowForm(false)}
           title={`Create New Collection`}
         >
-          <CollectionForm onCancel={() => setShowForm(false)} />
+          <CollectionForm 
+            onCancel={() => setShowForm(false)} 
+            onSuccess={() => {
+              setShowForm(false);
+              fetchCollections(1, true); // Refresh collections after creation
+            }}
+          />
         </Modal>
 
         {/* Modal for sharing collection */}

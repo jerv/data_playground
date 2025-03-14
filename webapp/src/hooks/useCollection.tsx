@@ -107,7 +107,10 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
         setTimeout(() => reject(new Error('Collections fetch timed out')), 5000)
       );
       
-      const collectionsPromise = collectionsAPI.getCollections(page, limit, searchTerm);
+      // Sort by newest first (createdAt in descending order)
+      const sort = 'createdAt:desc';
+      
+      const collectionsPromise = collectionsAPI.getCollections(page, limit, searchTerm, sort);
       
       // Race between the API call and the timeout
       const response = await Promise.race([collectionsPromise, timeoutPromise]);
@@ -199,12 +202,20 @@ export const CollectionProvider = ({ children }: { children: React.ReactNode }) 
       
       const { collection } = await collectionsAPI.createCollection(processedData);
       console.log('useCollection: Collection created successfully:', collection);
-      setCollectionState(prev => ({
-        ...prev,
-        collections: [...prev.collections, collection],
-        isLoading: false,
-        error: null,
-      }));
+      
+      // Add the new collection to the state and ensure it's at the top (newest first)
+      setCollectionState(prev => {
+        // Add the new collection to the beginning of the array since we're sorting by newest first
+        const updatedCollections = [collection, ...prev.collections];
+        
+        return {
+          ...prev,
+          collections: updatedCollections,
+          isLoading: false,
+          error: null,
+        };
+      });
+      
       toast.success('Collection created successfully');
       return true;
     } catch (error: any) {

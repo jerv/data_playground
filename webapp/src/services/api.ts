@@ -125,13 +125,14 @@ export const authAPI = {
 
 // Collections API
 export const collectionsAPI = {
-  getCollections: async (page = 1, limit = 10, search = '') => {
+  getCollections: async (page = 1, limit = 10, search = '', sort = 'createdAt:desc') => {
     try {
-      console.log(`Fetching collections: page=${page}, limit=${limit}, search=${search}`);
+      console.log(`Fetching collections: page=${page}, limit=${limit}, search=${search}, sort=${sort}`);
       
       const queryParams = new URLSearchParams({
         page: page.toString(),
-        limit: limit.toString()
+        limit: limit.toString(),
+        sort: sort
       });
       
       if (search) {
