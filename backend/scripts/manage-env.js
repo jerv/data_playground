@@ -57,7 +57,14 @@ allKeys.forEach(key => {
       const match = devValue === prodValue;
       console.log(`  Dev:  ${devValue.substring(0, 3)}... (${devValue.length} chars)`);
       console.log(`  Prod: ${prodValue.substring(0, 3)}... (${prodValue.length} chars)`);
-      console.log(`  Match: ${match ? '✅ Yes' : '❌ No - Tokens will not work across environments!'}`);
+      
+      if (match) {
+        console.log(`  Match: ✅ Yes - Same secret in both environments`);
+        console.log(`  Note: For better security, consider using different JWT secrets in each environment.`);
+      } else {
+        console.log(`  Match: ❌ No - Different secrets in each environment (more secure)`);
+        console.log(`  Note: This means tokens generated in one environment won't work in the other.`);
+      }
     } else {
       console.log(`  Dev:  ${devValue}`);
       console.log(`  Prod: ${prodValue}`);
@@ -81,13 +88,26 @@ console.log('Copy and paste these values into your Render.com dashboard:');
 console.log('');
 
 allKeys.forEach(key => {
-  // Prefer production value, fall back to dev value
-  const value = prodEnvReference[key] || devEnv[key] || '';
-  console.log(`${key}=${value}`);
+  // Special handling for JWT_SECRET
+  if (key === 'JWT_SECRET') {
+    console.log(`${key}=<your-secure-production-secret>`);
+    console.log('# Note: For security, use a different JWT_SECRET in production than in development');
+    console.log('# Generate one with: node scripts/generate-jwt-secret.js');
+  } else {
+    // Prefer production value, fall back to dev value
+    const value = prodEnvReference[key] || devEnv[key] || '';
+    console.log(`${key}=${value}`);
+  }
 });
 
 console.log('\nRemember to click "Save Changes" and select "Save and Deploy" after setting these variables.');
-console.log('\nNote: For security, consider generating a new JWT_SECRET for production using:');
-console.log('node scripts/generate-jwt-secret.js');
-console.log('\nJust remember that if you change JWT_SECRET, all existing tokens will be invalidated,');
-console.log('and users will need to log in again.'); 
+
+// Security recommendations
+console.log('\n=== Security Recommendations ===');
+console.log('1. Use different JWT_SECRET values in development and production');
+console.log('   - This is more secure but means tokens won\'t work across environments');
+console.log('   - Users will need to log in again when moving between environments');
+console.log('2. Use a strong, randomly generated secret for production');
+console.log('   - Generate one with: node scripts/generate-jwt-secret.js');
+console.log('3. Never commit your actual JWT secrets to Git');
+console.log('4. Use a secure MongoDB connection string with proper authentication'); 

@@ -44,9 +44,11 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     const token = authHeader.replace('Bearer ', '');
     console.log('Token found in request header');
     
-    // Log JWT secret info (safely)
+    // Get JWT secret based on environment
     const jwtSecret = process.env.JWT_SECRET || 'fallback_secret';
-    console.log('Using JWT secret (first 3 chars):', jwtSecret.substring(0, 3));
+    const environment = process.env.NODE_ENV || 'development';
+    
+    console.log(`Using JWT secret for ${environment} environment (first 3 chars): ${jwtSecret.substring(0, 3)}`);
     console.log('JWT secret length:', jwtSecret.length);
     
     try {
@@ -70,10 +72,22 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       next();
     } catch (error) {
       console.log('Authentication middleware error:', error);
+      
+      // Provide more helpful error message
+      let errorMessage = 'Invalid token';
+      if (error instanceof Error) {
+        if (error.name === 'JsonWebTokenError' && error.message === 'invalid signature') {
+          errorMessage = 'Token signature verification failed. This may happen if you are using a token generated in a different environment.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       return res.status(401).json({
         success: false,
-        message: 'Invalid token',
+        message: errorMessage,
         error: error instanceof Error ? error.message : 'Unknown error',
+        environment: environment,
       });
     }
   } catch (error) {
